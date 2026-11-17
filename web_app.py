@@ -12,6 +12,7 @@ import re
 import secrets
 import shutil
 import threading
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from functools import wraps
@@ -35,6 +36,7 @@ from postgres_connection import connect_postgres
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 UPLOAD_DIR = BASE_DIR / "web_uploads"
 REPORT_DIR = BASE_DIR / "web_reports"
 UPLOAD_DIR.mkdir(exist_ok=True)
@@ -419,15 +421,19 @@ def _report_text(job: Dict[str, Any]) -> str:
 def _analyse_job(job_id: str, video_path: str, original_name: str,
                  threshold: float, max_seconds: float, max_chunks: int,
                  crop_mode: str, checkpoint_path: str) -> None:
+    started_at = time.perf_counter()
     try:
         import inference as I
 
+        logger.info("Analysis job %s: loading checkpoint %s", job_id, checkpoint_path)
         _job_update(job_id, status="running", progress=0, message="Đang nạp model...")
         model, device, _ = I.load_checkpoint(checkpoint_path)
+        logger.info("Analysis job %s: checkpoint loaded on %s in %.1fs", job_id, device, time.perf_counter() - started_at)
 
         def on_progress(current: int, total: int, message: str) -> None:
             _job_update(job_id, progress=min(99, int(current * 100 / max(total, 1))), message=message)
 
+        logger.info("Analysis job %s: starting video inference", job_id)
         result = I.predict_video(
             video_path=video_path,
             model=model,
@@ -455,7 +461,9 @@ def _analyse_job(job_id: str, video_path: str, original_name: str,
             result=serializable,
             report_url=f"/analysis/{job_id}",
         )
+        logger.info("Analysis job %s: completed in %.1fs", job_id, time.perf_counter() - started_at)
     except Exception as exc:
+        logger.exception("Analysis job %s failed after %.1fs", job_id, time.perf_counter() - started_at)
         _job_update(job_id, status="failed", progress=100, message=str(exc), error=str(exc))
 
 
