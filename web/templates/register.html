@@ -6,12 +6,14 @@
   <title>Đăng ký — DeepGuard</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
+<body class="auth-body">
   <main class="auth-page">
-    <a class="wordmark" href="/">DeepGuard</a>
-    <form class="auth-card auth-form" method="post">
+    <div class="auth-shell">
+      <section class="auth-panel">
+        <a class="wordmark" href="/">DeepGuard</a>
+        <form class="auth-card auth-form" method="post">
       <p class="kicker">TẠO TÀI KHOẢN</p>
-      <h1>Đăng ký DeepGuard</h1>
+      <h1>Tạo tài khoản</h1>
       {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
       <label>Họ tên<input name="full_name" type="text" maxlength="120" autocomplete="name" required></label>
       <label>Email<input name="email" type="email" autocomplete="email" required></label>
@@ -19,8 +21,17 @@
       <label>Nhập lại mật khẩu<input name="password_confirmation" type="password" minlength="8" autocomplete="new-password" required></label>
       <label class="checkbox-label"><input name="accept_terms" type="checkbox" required> Tôi đồng ý với điều khoản sử dụng và chính sách quyền riêng tư.</label>
       <button class="button button-dark" type="submit">Đăng ký</button>
-      <p class="auth-link">Đã có tài khoản? <a href="{{ url_for('login') }}">Đăng nhập</a></p>
-    </form>
+          <p class="auth-link">Chúng tôi sẽ gửi email xác thực. Đã có tài khoản? <a href="{{ url_for('login') }}">Đăng nhập</a></p>
+        </form>
+      </section>
+      <aside class="auth-art">
+        <svg class="auth-wave" viewBox="0 0 742 780" aria-hidden="true">
+          <path d="M0 330c110-260 210-260 320-60s200 180 280-110" fill="none" stroke="#fff" stroke-width="34" opacity=".18" stroke-linecap="round"/>
+          <path d="M0 380c120-230 220-230 330-40s190 150 270-90" fill="none" stroke="#3dd6e8" stroke-width="10" opacity=".85" stroke-linecap="round"/>
+        </svg>
+        <h2>Bắt đầu kiểm tra<br>video.</h2>
+      </aside>
+    </div>
   </main>
 </body>
 </html>

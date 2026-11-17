@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="vi">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Lịch sử — DeepGuard</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"></head>
+<body>
+  <main class="site">
+    <nav class="topbar"><a class="wordmark" href="/">DeepGuard</a><div class="nav-links"><a class="nav-account" href="{{ url_for('dashboard') }}">Dashboard</a><a class="nav-account" href="{{ url_for('settings') }}">Tài khoản</a></div></nav>
+    <section class="section-rule"><p class="kicker">LỊCH SỬ PHÂN TÍCH</p><h1>Video của bạn</h1>
+      <form class="history-filters" method="get"><input name="q" value="{{ search }}" placeholder="Tìm theo tên file"><select name="result"><option value="">Mọi kết quả</option><option value="REAL" {{ 'selected' if result_filter == 'REAL' }}>REAL</option><option value="FAKE" {{ 'selected' if result_filter == 'FAKE' }}>FAKE</option></select><select name="status"><option value="">Mọi trạng thái</option><option value="queued" {{ 'selected' if status_filter == 'queued' }}>Đang chờ</option><option value="running" {{ 'selected' if status_filter == 'running' }}>Đang xử lý</option><option value="completed" {{ 'selected' if status_filter == 'completed' }}>Hoàn tất</option><option value="failed" {{ 'selected' if status_filter == 'failed' }}>Thất bại</option></select><select name="sort"><option value="newest" {{ 'selected' if sort == 'newest' }}>Mới nhất</option><option value="oldest" {{ 'selected' if sort == 'oldest' }}>Cũ nhất</option><option value="score" {{ 'selected' if sort == 'score' }}>Điểm FAKE cao</option></select><button class="button button-dark" type="submit">Lọc</button></form>
+      <div class="history-table"><div class="history-head"><span>Video</span><span>Trạng thái</span><span>P(FAKE)</span><span>Ngày</span><span></span></div>{% for job in jobs %}<div class="history-row"><span><b>{{ job.original_name }}</b></span><span>{{ job.overall_label or job.status }}</span><span>{{ '%.4f'|format(job.overall_score) if job.overall_score is not none else '—' }}</span><span>{{ job.created_at }}</span><span class="row-actions">{% if job.status == 'completed' %}<a href="{{ url_for('report_detail', job_id=job.id) }}">Mở báo cáo</a>{% endif %}<form method="post" action="{{ url_for('delete_history', job_id=job.id) }}" onsubmit="return confirm('Xóa lịch sử này?')"><button type="submit">Xóa</button></form></span></div>{% else %}<p class="muted">Không tìm thấy phân tích phù hợp.</p>{% endfor %}</div>
+    </section>
+  </main>
+</body>
+</html>

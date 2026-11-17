@@ -52,6 +52,38 @@ Các trang tài khoản:
 /verify-email      Xác thực email từ token
 ```
 
+Các trang sau yêu cầu đăng nhập:
+
+```text
+/dashboard         Tổng quan số liệu cá nhân
+/history           Tìm kiếm, lọc và xóa lịch sử phân tích
+/reports/<id>      Chi tiết kết quả và tải TXT/JSON/CSV/PDF
+/settings          Hồ sơ, mật khẩu, thông báo và phiên đăng nhập
+/shared-report     Link báo cáo tạm thời trong 7 ngày
+```
+
+Mỗi job phân tích được lưu vào PostgreSQL để không mất lịch sử khi khởi động
+lại web. Hạn mức mặc định là 20 lượt/ngày và có thể đổi bằng
+`DAILY_ANALYSIS_LIMIT`.
+
+## Khu vực quản trị
+
+Sau khi đăng ký tài khoản, điền email vào `ADMIN_EMAIL` trong `.env` rồi chạy:
+
+```powershell
+python promote_admin.py
+```
+
+Các trang quản trị:
+
+```text
+/admin          Tổng quan user, video, job, CPU/RAM/GPU và storage
+/admin/users    Tìm kiếm, khóa/mở khóa, đổi role, reset và xóa user
+/admin/videos   Lọc video/report, xem dung lượng, đặt retention và xóa dữ liệu
+```
+
+Không cấp quyền admin cho tài khoản không thuộc nhóm quản trị.
+
 Để gửi email thật, điền các biến `SMTP_*` trong `.env`. Nếu chưa cấu hình SMTP,
 ứng dụng không gửi email ra ngoài mà ghi link dùng một lần vào log để kiểm thử
 local.

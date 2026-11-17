@@ -6,21 +6,63 @@
   <title>DeepGuard — Phân tích video</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body data-initial-page="{{ active_page|default('page-upload') }}">
+<body data-initial-page="{{ active_page|default('page-home') }}">
   <main class="site">
     <nav class="topbar">
       <a class="wordmark" href="/">DeepGuard</a>
       <div class="nav-links">
-        <button class="nav-tab active" data-page="page-upload">Kiểm tra video</button>
-        <button class="nav-tab" data-page="page-face-test">Test model cắt môi</button>
-        <button class="nav-tab" data-page="page-report">Báo cáo</button>
+        <button class="nav-tab active" data-page="page-home">Trang chủ</button>
+        <button class="nav-tab" data-page="page-check">Kiểm tra video</button>
         <button class="nav-tab" data-page="page-limits">Cách hoạt động</button>
-        <button class="nav-tab" data-page="page-support">Liên hệ & hỗ trợ</button>
-        <a class="nav-account" href="#account">{{ current_user.full_name if current_user else "Đăng nhập / Đăng ký" }}</a>
+        <button class="nav-tab" data-page="page-support">Liên hệ</button>
+        <button class="nav-tab utility-tab" data-page="page-face-test">Test model</button>
+        <button class="nav-tab utility-tab" data-page="page-report">Báo cáo</button>
+        {% if current_user %}
+          <a class="nav-account" href="{{ url_for('dashboard') }}">Dashboard</a>
+          <a class="nav-account" href="{{ url_for('latest_analysis') }}">Kết quả</a>
+          <form method="post" action="{{ url_for('logout') }}"><button class="nav-tab" type="submit">Đăng xuất</button></form>
+        {% else %}
+          <a class="nav-account" href="{{ url_for('login') }}">Đăng nhập</a>
+          <a class="button button-dark nav-register" href="{{ url_for('register') }}">Đăng ký</a>
+        {% endif %}
       </div>
     </nav>
 
-    <section id="page-upload" class="page active">
+    <section id="page-home" class="page active">
+    <section id="account" class="account-section account-top section-rule">
+      <p class="kicker">TÀI KHOẢN</p>
+      {% if auth_error %}<div class="alert error">{{ auth_error }}</div>{% endif %}
+      {% if contact_message %}<div class="alert success">{{ contact_message }}</div>{% endif %}
+      {% if current_user %}
+      <div class="account-card">
+        <div>
+          <span class="label">ĐÃ ĐĂNG NHẬP</span>
+          <h2>Xin chào, {{ current_user.full_name }}</h2>
+          <p class="muted">{{ current_user.email }}</p>
+        </div>
+        <form method="post" action="{{ url_for('logout') }}"><button class="button button-light" type="submit">Đăng xuất</button></form>
+      </div>
+      {% else %}
+      <div class="auth-grid">
+        <form class="auth-card" method="post" action="{{ url_for('login') }}">
+          <h2>Đăng nhập</h2>
+          <label>Email<input name="email" type="email" autocomplete="email" required></label>
+          <label>Mật khẩu<input name="password" type="password" autocomplete="current-password" required></label>
+          <button class="button button-dark" type="submit">Đăng nhập</button>
+          <a class="auth-link" href="{{ url_for('forgot_password') }}">Quên mật khẩu?</a>
+        </form>
+        <form class="auth-card" method="post" action="{{ url_for('register') }}">
+          <h2>Tạo tài khoản</h2>
+          <label>Họ tên<input name="full_name" type="text" maxlength="120" required></label>
+          <label>Email<input name="email" type="email" autocomplete="new-password" required></label>
+          <label>Mật khẩu<input name="password" type="password" minlength="8" autocomplete="new-password" required></label>
+          <label>Nhập lại mật khẩu<input name="password_confirmation" type="password" minlength="8" autocomplete="new-password" required></label>
+          <label class="checkbox-label"><input name="accept_terms" type="checkbox" required> Tôi đồng ý điều khoản sử dụng.</label>
+          <button class="button button-dark" type="submit">Đăng ký</button>
+        </form>
+      </div>
+      {% endif %}
+    </section>
     <section class="hero" id="upload">
       <div class="hero-copy">
         <p class="kicker">KIỂM TRA VIDEO · ĐỒNG BỘ KHẨU HÌNH & TIẾNG NÓI</p>
@@ -35,7 +77,8 @@
         <p class="box-label">TẢI VIDEO LÊN</p>
         <div class="drop-preview">
           <div class="play-mark">▶</div>
-          <span>Kéo thả, chọn file hoặc dán liên kết video<br><small>MP4 · MOV · AVI · MKV · TỐI ĐA 500 MB</small></span>
+          <span id="drop-hint">Kéo thả, chọn file hoặc dán liên kết video<br><small>MP4 · MOV · AVI · MKV · TỐI ĐA 500 MB</small></span>
+          <video id="hero-preview" class="hero-preview hidden" controls preload="metadata"></video>
         </div>
         <input id="video-input" type="file" accept=".mp4,.mov,.avi,.mkv,video/*" hidden>
         <button id="choose-btn" class="button button-dark upload-button">Chọn tệp từ máy</button>
@@ -53,6 +96,13 @@
       </div>
     </section>
 
+    </section>
+
+    <section id="page-check" class="page">
+    <section class="check-page section-rule">
+      <p class="kicker">KIỂM TRA VIDEO</p>
+      <h2>Tải video cần kiểm tra</h2>
+    </section>
     <section id="upload-status" class="upload-status hidden">
       <div class="video-info">
         <div class="preview-wrap"><video id="preview" controls preload="metadata"></video></div>
@@ -282,41 +332,6 @@
     </section>
     </section>
 
-    <section id="account" class="account-section section-rule">
-      <p class="kicker">TÀI KHOẢN</p>
-      {% if auth_error %}<div class="alert error">{{ auth_error }}</div>{% endif %}
-      {% if contact_message %}<div class="alert success">{{ contact_message }}</div>{% endif %}
-      {% if current_user %}
-      <div class="account-card">
-        <div>
-          <span class="label">ĐÃ ĐĂNG NHẬP</span>
-          <h2>Xin chào, {{ current_user.full_name }}</h2>
-          <p class="muted">{{ current_user.email }}</p>
-        </div>
-        <form method="post" action="{{ url_for('logout') }}"><button class="button button-light" type="submit">Đăng xuất</button></form>
-      </div>
-      {% else %}
-      <div class="auth-grid">
-        <form class="auth-card" method="post" action="{{ url_for('login') }}">
-          <h2>Đăng nhập</h2>
-          <label>Email<input name="email" type="email" autocomplete="email" required></label>
-          <label>Mật khẩu<input name="password" type="password" autocomplete="current-password" required></label>
-          <button class="button button-dark" type="submit">Đăng nhập</button>
-          <a class="auth-link" href="{{ url_for('forgot_password') }}">Quên mật khẩu?</a>
-        </form>
-        <form class="auth-card" method="post" action="{{ url_for('register') }}">
-          <h2>Tạo tài khoản</h2>
-          <label>Họ tên<input name="full_name" type="text" maxlength="120" required></label>
-          <label>Email<input name="email" type="email" autocomplete="email" required></label>
-          <label>Mật khẩu<input name="password" type="password" minlength="8" autocomplete="new-password" required></label>
-          <label>Nhập lại mật khẩu<input name="password_confirmation" type="password" minlength="8" autocomplete="new-password" required></label>
-          <label class="checkbox-label"><input name="accept_terms" type="checkbox" required> Tôi đồng ý điều khoản sử dụng.</label>
-          <button class="button button-dark" type="submit">Đăng ký</button>
-        </form>
-      </div>
-      {% endif %}
-    </section>
-
     <section id="contact" class="contact-section section-rule">
       <p class="kicker">LIÊN HỆ</p>
       <div class="contact-grid">
@@ -332,6 +347,10 @@
 
     <footer><span>© DeepGuard</span><span><a href="#contact">Liên hệ</a> · Điều khoản · Quyền riêng tư</span></footer>
   </main>
+  <script>
+    window.__analysisResult = {{ analysis_result|default(None)|tojson }};
+    window.__analysisReportUrl = {{ analysis_report_url|default(None)|tojson }};
+  </script>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

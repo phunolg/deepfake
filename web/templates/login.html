@@ -6,21 +6,33 @@
   <title>Đăng nhập — DeepGuard</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
+<body class="auth-body">
   <main class="auth-page">
-    <a class="wordmark" href="/">DeepGuard</a>
-    <form class="auth-card auth-form" method="post">
+    <div class="auth-shell">
+      <section class="auth-panel">
+        <a class="wordmark" href="/">DeepGuard</a>
+        <form class="auth-card auth-form" method="post">
       <p class="kicker">TÀI KHOẢN</p>
       <h1>Đăng nhập</h1>
       {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
       {% if message %}<div class="alert success">{{ message }}</div>{% endif %}
+      <input type="hidden" name="next" value="{{ request.args.get('next', '') }}">
       <label>Email<input name="email" type="email" autocomplete="email" required></label>
       <label>Mật khẩu<input name="password" type="password" autocomplete="current-password" required></label>
       <label class="checkbox-label"><input name="remember" type="checkbox"> Ghi nhớ đăng nhập trong 30 ngày</label>
       <button class="button button-dark" type="submit">Đăng nhập</button>
       <a class="auth-link" href="{{ url_for('forgot_password') }}">Quên mật khẩu?</a>
       <p class="auth-link">Chưa có tài khoản? <a href="{{ url_for('register') }}">Đăng ký</a></p>
-    </form>
+        </form>
+      </section>
+      <aside class="auth-art">
+        <svg class="auth-wave" viewBox="0 0 742 780" aria-hidden="true">
+          <path d="M0 330c110-260 210-260 320-60s200 180 280-110" fill="none" stroke="#fff" stroke-width="34" opacity=".18" stroke-linecap="round"/>
+          <path d="M0 380c120-230 220-230 330-40s190 150 270-90" fill="none" stroke="#3dd6e8" stroke-width="10" opacity=".85" stroke-linecap="round"/>
+        </svg>
+        <h2>Bắt đầu kiểm tra<br>video.</h2>
+      </aside>
+    </div>
   </main>
 </body>
 </html>

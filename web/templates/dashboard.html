@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="vi">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Dashboard — DeepGuard</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"></head>
+<body>
+  <main class="site">
+    <nav class="topbar"><a class="wordmark" href="/">DeepGuard</a><div class="nav-links"><a class="nav-account" href="{{ url_for('latest_analysis') }}">Kết quả</a><a class="nav-account" href="{{ url_for('history') }}">Lịch sử</a><a class="nav-account" href="{{ url_for('settings') }}">Tài khoản</a><form method="post" action="{{ url_for('logout') }}"><button class="nav-tab" type="submit">Đăng xuất</button></form></div></nav>
+    <section class="section-rule dashboard-page">
+      <p class="kicker">TỔNG QUAN CÁ NHÂN</p>
+      <div class="dashboard-heading"><div><h1>Dashboard</h1><p class="section-intro">Theo dõi các video bạn đã phân tích và mở lại báo cáo bất cứ lúc nào.</p></div><a class="button button-dark" href="/">Upload video mới</a></div>
+      <div class="stats-grid">
+        <div class="stat-card"><span class="label">TỔNG VIDEO</span><strong>{{ stats.total }}</strong></div>
+        <div class="stat-card"><span class="label">KẾT QUẢ REAL</span><strong class="green">{{ stats.real_count }}</strong></div>
+        <div class="stat-card"><span class="label">NGUY CƠ FAKE</span><strong class="red">{{ stats.fake_count }}</strong></div>
+        <div class="stat-card"><span class="label">LƯỢT CÒN LẠI HÔM NAY</span><strong>{{ remaining }}</strong></div>
+      </div>
+      <div class="dashboard-grid">
+        <section class="panel"><div class="panel-heading"><h2>Phân tích gần đây</h2><a href="{{ url_for('history') }}">Xem tất cả</a></div>
+          {% if recent %}<div class="job-list">{% for job in recent %}<a class="job-row" href="{{ url_for('report_detail', job_id=job.id) }}"><span><b>{{ job.original_name }}</b><small>{{ job.created_at.strftime('%d/%m/%Y %H:%M') if job.created_at.strftime is defined else job.created_at }}</small></span><strong class="{{ 'red' if job.overall_label == 'FAKE' else 'green' }}">{{ job.overall_label or job.status }}</strong></a>{% endfor %}</div>{% else %}<p class="muted">Chưa có video nào được phân tích.</p>{% endif %}
+        </section>
+        <section class="panel"><h2>Thống kê theo tháng</h2>{% if monthly %}<div class="monthly-bars">{% for item in monthly|reverse %}<div><i style="height:{{ [item.count * 12, 100]|min }}%"></i><span>{{ item.month }}</span><b>{{ item.count }}</b></div>{% endfor %}</div>{% else %}<p class="muted">Chưa có dữ liệu thống kê.</p>{% endif %}</section>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

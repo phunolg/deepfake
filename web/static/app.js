@@ -30,9 +30,13 @@ async function uploadVideo(file) {
   try {
     const response = await fetch("/api/upload", { method:"POST", body:form });
     const data = await response.json();
+    if (response.status === 401) { window.location.href = "/login?next=/"; return; }
     if (!response.ok) throw new Error(data.error || "Upload thất bại.");
     upload = data;
     $("preview").src = data.media_url;
+    $("hero-preview").src = data.media_url;
+    $("hero-preview").classList.remove("hidden");
+    $("drop-hint").classList.add("hidden");
     $("file-name").textContent = data.filename;
     const m = data.metadata;
     $("metadata-grid").innerHTML = [
@@ -43,7 +47,6 @@ async function uploadVideo(file) {
       meta("Audio", m.has_audio ? "Có" : "Không"),
       meta("Dung lượng", `${(file.size / 1024 / 1024).toFixed(1)} MB`)
     ].join("");
-    $("upload-status").classList.remove("hidden");
     $("analyze-btn").disabled = false;
   } catch (error) { showError(error.message); }
   finally { $("choose-btn").disabled = false; $("choose-btn").textContent = "Chọn video"; }
@@ -68,6 +71,7 @@ async function startAnalysis() {
     })
   });
   const data = await response.json();
+  if (response.status === 401) { window.location.href = "/login?next=/"; return; }
   if (!response.ok) { showError(data.error || "Không thể bắt đầu phân tích."); $("analyze-btn").disabled = false; return; }
   currentJob = data.job_id;
   pollTimer = setInterval(pollJob, 700);
@@ -82,7 +86,8 @@ async function pollJob() {
   $("progress-text").textContent = `${progress}%`;
   $("status-message").textContent = job.message || "";
   if (job.status === "completed") {
-    clearInterval(pollTimer); renderResult(job.result, job.report_url); $("analyze-btn").disabled = false; showPage("page-report");
+    clearInterval(pollTimer);
+    window.location.href = job.report_url || `/analysis/${currentJob}`;
   } else if (job.status === "failed") {
     clearInterval(pollTimer); showError(job.error || "Phân tích thất bại."); $("analyze-btn").disabled = false;
   }
@@ -206,7 +211,14 @@ function selectSegment(chunk, element) {
 }
 
 $("choose-btn").onclick = () => $("video-input").click();
-$("hero-check").onclick = () => $("video-input").click();
+$("hero-check").onclick = () => {
+  if (upload) {
+    $("upload-status").classList.remove("hidden");
+    showPage("page-check");
+  } else {
+    $("video-input").click();
+  }
+};
 $("sample-report").onclick = () => showPage("page-report");
 $("model-profile").onchange = (event) => {
   selectedModelProfile = event.target.value;
@@ -223,7 +235,7 @@ $("face-test-button").onclick = () => {
   $("model-profile").value = "mouth";
   $("crop-mode").value = "mouth_lm";
   $("crop-mode").disabled = false;
-  showPage("page-upload");
+  showPage("page-check");
   $("video-input").click();
 };
 $("video-input").onchange = (event) => uploadVideo(event.target.files[0]);
@@ -233,6 +245,20 @@ $("threshold").oninput = (event) => $("threshold-value").textContent = (Number(e
 ["dragleave","drop"].forEach((eventName) => $("dropzone").addEventListener(eventName, (event) => { event.preventDefault(); $("dropzone").classList.remove("drag"); }));
 $("dropzone").ondrop = (event) => uploadVideo(event.dataTransfer.files[0]);
 document.querySelectorAll(".nav-tab").forEach((tab) => {
-  tab.onclick = () => showPage(tab.dataset.page);
+  tab.onclick = () => {
+    if (tab.dataset.page === "page-check") {
+      if (!upload) {
+        showPage("page-home");
+        $("video-input").click();
+        return;
+      }
+      $("upload-status").classList.remove("hidden");
+    }
+    showPage(tab.dataset.page);
+  };
 });
-showPage(document.body.dataset.initialPage || "page-upload");
+showPage(document.body.dataset.initialPage || "page-home");
+if (window.__analysisResult) {
+  renderResult(window.__analysisResult, window.__analysisReportUrl || "#");
+  showPage("page-report");
+}

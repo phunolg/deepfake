@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="vi">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Phân tích video — DeepGuard</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"></head>
+<body>
+  <main class="site"><nav class="topbar"><a class="wordmark" href="/">DeepGuard</a><div class="nav-links">{% if not shared %}<a class="nav-account" href="{{ url_for('dashboard') }}">Dashboard</a><a class="nav-account" href="{{ url_for('latest_analysis') }}">Kết quả</a><a class="nav-account" href="{{ url_for('history') }}">Lịch sử</a>{% endif %}</div></nav>
+  <section class="section-rule report-page">
+    {% set valid_chunks = result.chunks|selectattr('status', 'equalto', 'valid')|list %}
+    {% set fake_chunks = valid_chunks|selectattr('label', 'equalto', 'FAKE')|list %}
+    {% set real_chunks = valid_chunks|selectattr('label', 'equalto', 'REAL')|list %}
+    {% set fake_percent = (fake_chunks|length * 100 / valid_chunks|length) if valid_chunks|length else 0 %}
+    <p class="kicker">PHÂN TÍCH VIDEO{% if shared %} · LINK CHIA SẺ{% endif %}</p><div class="report-page-heading"><div><h1>{{ job.original_name }}</h1><p class="muted">Tạo lúc {{ job.created_at }}</p></div><div class="export-links"><a href="{{ url_for('export_report', job_id=job.id, kind='txt') }}">TXT</a><a href="{{ url_for('export_report', job_id=job.id, kind='json') }}">JSON</a><a href="{{ url_for('export_report', job_id=job.id, kind='csv') }}">CSV</a><a href="{{ url_for('export_report', job_id=job.id, kind='pdf') }}">PDF</a></div></div>
+    <div class="report-summary-grid analysis-summary-grid"><div><span class="label">KẾT LUẬN</span><strong class="{{ 'red' if result.overall_label == 'FAKE' else 'green' }}">{{ result.overall_label }}</strong></div><div><span class="label">P(FAKE) TRUNG BÌNH</span><strong>{{ '%.4f'|format(result.overall_score) if result.overall_score is not none else '—' }}</strong></div><div><span class="label">TỶ LỆ FAKE</span><strong class="red">{{ '%.1f'|format(fake_percent) }}%</strong></div><div><span class="label">ĐOẠN FAKE</span><strong class="red">{{ fake_chunks|length }}</strong></div><div><span class="label">ĐOẠN REAL</span><strong class="green">{{ real_chunks|length }}</strong></div><div><span class="label">A-V DISTANCE</span><strong>{{ '%.4f'|format(result.overall_distance) if result.overall_distance is not none else '—' }}</strong></div></div>
+    {% if not shared %}<button class="button button-light" id="share-report">Tạo link chia sẻ 7 ngày</button><span class="share-result" id="share-result"></span>{% endif %}
+    <h2 class="report-subtitle">Kết quả theo từng giây</h2><div class="timeline-static">{% for chunk in result.chunks %}<div class="{{ 'segment-high' if chunk.status == 'valid' and chunk.score >= result.threshold else 'segment-low' if chunk.status == 'valid' else 'segment-skipped' }}" title="{{ chunk.reason or '' }}"><b>{{ chunk.start }}–{{ chunk.end }}s</b><span>{{ '%.3f'|format(chunk.score) if chunk.score is not none else 'Bị loại' }}</span></div>{% endfor %}</div>
+    <div class="table-scroll"><table class="data-table"><thead><tr><th>Đoạn</th><th>P(FAKE)</th><th>A-V distance</th><th>Nhãn</th><th>Trạng thái / lý do</th></tr></thead><tbody>{% for chunk in result.chunks %}<tr><td>{{ chunk.start }}–{{ chunk.end }}s</td><td>{{ '%.4f'|format(chunk.score) if chunk.score is not none else '—' }}</td><td>{{ '%.4f'|format(chunk.distance) if chunk.distance is not none else '—' }}</td><td>{{ chunk.label }}</td><td>{{ chunk.reason if chunk.status == 'skipped' else 'Hợp lệ' }}</td></tr>{% endfor %}</tbody></table></div>
+    <p class="report-disclaimer">Kết quả là dự đoán của mô hình, không phải bằng chứng pháp lý tuyệt đối.</p>
+  </section></main>
+  {% if not shared %}<script>document.getElementById("share-report").onclick = async () => { const r = await fetch("{{ url_for('create_report_share', job_id=job.id) }}", {method:"POST"}); const data = await r.json(); document.getElementById("share-result").textContent = data.url || data.error; };</script>{% endif %}
+</body>
+</html>
