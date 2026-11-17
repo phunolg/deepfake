@@ -1,0 +1,428 @@
+MO HINH PHAT HIEN DEEPFAKE AUDIO-VISUAL
+========================================
+
+1. Muc dich cua mo hinh
+------------------------
+
+Day la mo hinh phat hien deepfake audio-visual, tap trung vao:
+
+- Chuyen dong cua vung mieng.
+- Dac trung hinh anh cua moi trong tung doan video.
+- Dac trung am thanh tuong ung.
+- Muc do dong bo giua khau hinh va tieng noi.
+
+Mo hinh khong tao video gia. Mo hinh chia video thanh nhieu doan dai 1
+giay, sau do tinh xac suat doan do la FAKE:
+
+    P(FAKE) >= 0.5  -> FAKE
+    P(FAKE) <  0.5  -> REAL
+
+Diem tong ket cua video la trung binh P(FAKE) cua cac doan hop le.
+
+
+2. Cac model thanh phan
+-----------------------
+
+2.1. YuNet
+
+File:
+    models\face_detection_yunet_2023mar.onnx
+
+YuNet la model phat hien khuon mat, khong phai model phan loai
+deepfake. YuNet co nhiem vu:
+
+- Tim bounding box cua khuon mat.
+- Xac dinh vi tri tuong doi cua mieng.
+- Ho tro tao vung crop mieng khi MediaPipe khong lay duoc landmark.
+
+2.2. MediaPipe Face Landmarker
+
+MediaPipe lay cac landmark tren khuon mat, trong do he thong su dung
+40 diem xung quanh moi de xac dinh chinh xac vung mieng.
+
+Neu MediaPipe khong phat hien duoc landmark hop le, he thong fallback
+sang vi tri mieng do YuNet cung cap.
+
+2.3. Model phan loai deepfake
+
+Checkpoint:
+    model_best_epoch23.pth.tar
+    hoac checkpoint epoch50 da duoc huan luyen
+
+Day la model chinh dung de phan tich dong bo hinh anh va am thanh.
+Kien truc gom:
+
+- Nhanh hinh anh ResNet18 2D/3D.
+- Nhanh am thanh CNN 1D.
+- Co che attention.
+- Khoang cach Audio-Visual.
+- Lop Linear va Sigmoid tao P(FAKE).
+
+
+3. Dau vao cua model
+---------------------
+
+Moi doan xu ly dai dung 1 giay.
+
+3.1. Dau vao hinh anh
+
+- 30 frame.
+- Toc do 30 FPS.
+- Moi frame crop vung mieng.
+- Resize ve 224 x 224 pixel.
+- Tensor co shape:
+
+      (1, 1, 3, 30, 224, 224)
+
+Y nghia:
+
+- 1 mau trong batch.
+- 1 doan.
+- 3 kenh mau RGB.
+- 30 frame theo thoi gian.
+- Kich thuoc anh 224 x 224.
+
+3.2. Dau vao am thanh
+
+- 1 giay am thanh.
+- Mono.
+- Sample rate 48000 Hz.
+- PCM int16.
+- Tensor co shape:
+
+      (1, 48000)
+
+Neu audio ngan hon 48000 mau thi duoc pad bang so 0. Neu dai hon thi
+bi cat ve dung 48000 mau.
+
+
+4. Tien xu ly video
+--------------------
+
+Buoc 1: Doc thong tin video
+
+He thong kiem tra:
+
+- Chieu rong va chieu cao.
+- FPS.
+- So luong frame.
+- Thoi luong.
+- Stream video.
+- Stream audio.
+
+Video khong co audio se bi tu choi vi model can ca hinh anh va am thanh.
+
+Buoc 2: Chuan hoa kich thuoc frame
+
+Neu canh ngan cua video lon hon 540 pixel, frame trung gian duoc thu
+nho sao cho canh ngan xap xi 540 pixel. Viec nay giup giam bo nho va
+thoi gian xu ly nhung van giu du thong tin de phat hien khuon mat.
+
+Buoc 3: Chia video thanh cac doan 1 giay
+
+Video duoc doc lai o 30 FPS va chia thanh cac doan:
+
+    0-1 giay, 1-2 giay, 2-3 giay, ...
+
+Mac dinh he thong quet toi da 12 giay dau va dung toi da 10 doan hop le.
+
+
+5. Loc chuyen canh
+-------------------
+
+Moi doan 1 giay duoc kiem tra chuyen canh truoc khi dua vao model:
+
+1. Thu nho cac frame.
+2. Chuyen frame tu BGR sang HSV.
+3. Tinh histogram mau voi kich thuoc 16 x 8.
+4. So sanh histogram giua cac frame lien tiep bang khoang cach
+   Bhattacharyya.
+5. Neu gia tri lon nhat vuot 0.45, doan bi loai.
+
+Muc dich la khong dua cac doan cat canh manh, ghep canh hoac khong lien
+mach vao model.
+
+
+6. Phat hien khuon mat
+-----------------------
+
+YuNet duoc chay tren 5 frame dai dien:
+
+    frame 0, 7, 15, 22, 29
+
+Mot doan chi hop le khi phat hien duoc khuon mat tren it nhat 60% so
+frame mau, tuc la it nhat 3 tren 5 frame.
+
+Khi co nhieu khuon mat:
+
+- O frame dau, chon khuon mat lon nhat.
+- O cac frame sau, chon khuon mat gan vi tri truoc do nhat.
+
+Cach nay giup theo doi cung mot nguoi va han che chuyen sang nguoi khac.
+
+
+7. Crop vung mieng
+-------------------
+
+Che do mac dinh la mouth_lm.
+
+Voi moi frame mau:
+
+1. MediaPipe lay 40 diem landmark quanh moi.
+2. Chuyen toa do landmark tu dang chuan hoa sang toa do pixel.
+3. Tinh hinh chu nhat bao quanh moi.
+4. Tao mot o vuong bao quanh vung mieng.
+
+Kich thuoc o crop co dang:
+
+    max(1.6 x chieu rong moi, 50% canh khuon mat)
+
+Viec dat kich thuoc toi thieu bang 50% canh khuon mat giup khong crop
+qua chat khi nguoi trong video dang chu moi hoac noi nho.
+
+Neu MediaPipe that bai:
+
+    mouth_lm -> mouth
+
+He thong fallback sang crop dua tren tam mieng va kich thuoc khuon mat
+do YuNet cung cap.
+
+
+8. On dinh vung crop
+--------------------
+
+Sau khi co cac box mieng tren 5 frame mau:
+
+1. Hop nhat cac box.
+2. Tao mot crop box duy nhat cho toan bo 30 frame.
+3. Mo rong crop voi he so MOUTH_MARGIN = 1.1.
+4. Ap dung cung mot o vuong cho ca 30 frame.
+5. Resize moi crop ve 224 x 224.
+
+Neu vung mieng di chuyen qua nhieu, doan bi loai. Dieu kien:
+
+    MAX_UNION_RATIO = 2.0
+
+Muc dich la tranh crop bi nhay vi tri hoac chon nham nguoi.
+
+
+9. Chuan hoa hinh anh
+---------------------
+
+Moi frame duoc xu ly nhu sau:
+
+1. Chuyen tu BGR sang RGB.
+2. Chuyen sang tensor.
+3. Chuan hoa voi:
+
+      mean = (0.5, 0.5, 0.5)
+      std  = (0.5, 0.5, 0.5)
+
+Cong thuc:
+
+    pixel_normalized = (pixel / 255 - 0.5) / 0.5
+
+Gia tri dau vao hinh anh nam xap xi trong khoang [-1, 1].
+
+
+10. Tien xu ly am thanh
+-----------------------
+
+Audio duoc tach bang FFmpeg voi cau hinh:
+
+- Mono.
+- Sample rate 48000 Hz.
+- PCM 16-bit.
+
+Sau do audio duoc chuan hoa min-max:
+
+    audio_norm = (audio - min) / (max - min + epsilon)
+
+Va dua ve khoang xap xi [-1, 1]:
+
+    audio_input = (audio_norm - 0.5) / 0.5
+
+Audio im lang van duoc xu ly an toan nho epsilon trong phep chia.
+
+
+11. Kien truc ben trong model
+-----------------------------
+
+11.1. Nhanh hinh anh
+
+Nhanh hinh anh su dung ResNet18 2D/3D de hoc:
+
+- Dac trung khong gian cua vung mieng.
+- Chuyen dong cua moi qua 30 frame.
+- Bien doi cua khau hinh theo thoi gian.
+
+Model khong chi nhin mot frame, ma phan tich ca chuoi 30 frame lien tiep.
+
+11.2. Nhanh am thanh
+
+Audio di qua CNN 1D gom:
+
+- Conv1D kernel lon de trich xuat dac trung ban dau.
+- BatchNorm.
+- ReLU.
+- MaxPool.
+- Cac lop Conv1D tiep theo.
+
+Dac trung am thanh sau do duoc bien doi sang khong gian dac trung tuong
+ung voi hinh anh.
+
+11.3. So sanh Audio-Visual
+
+Model tinh sai khac giua dac trung video va dac trung audio:
+
+    (video_feature - audio_feature)^2
+
+Sau do tao ban do khoang cach Audio-Visual. Khoang cach nay the hien
+muc do khop giua tieng noi va chuyen dong mieng.
+
+Co che attention tap trung vao cac vi tri va thoi diem quan trong.
+Checkpoint epoch50 su dung:
+
+    with_attention = True
+    residual_conn = False
+
+Cuoi cung, ban do khoang cach duoc dua qua:
+
+    Linear -> Sigmoid
+
+de tao ra xac suat P(FAKE) trong khoang [0, 1].
+
+
+12. Luong xu ly day du
+----------------------
+
+    Video
+      |
+      +-- Kiem tra video va audio
+      |
+      +-- Tach audio 48 kHz mono
+      |
+      +-- Chuyen video ve 30 FPS
+      |
+      +-- Chia thanh doan 1 giay
+              |
+              +-- Loc chuyen canh
+              |
+              +-- Dò mat bang YuNet
+              |
+              +-- Lay landmark moi bang MediaPipe
+              |
+              +-- Fallback YuNet neu can
+              |
+              +-- Hop nhat crop box
+              |
+              +-- Crop 30 frame vung mieng
+              |
+              +-- Resize 224 x 224
+              |
+              +-- Chuan hoa hinh anh
+              |
+              +-- Lay 48000 mau audio tuong ung
+              |
+              +-- Chuan hoa audio
+              |
+              +-- Model xu ly song song hinh va tieng
+              |
+              +-- Tinh A-V distance
+              |
+              +-- Tao P(FAKE)
+              |
+              +-- Gan nhan REAL/FAKE
+      |
+      +-- Trung binh cac doan hop le
+      |
+      +-- Ket luan cuoi video
+
+
+13. Cach tinh ket qua cuoi cung
+--------------------------------
+
+Moi doan hop le cho ra:
+
+- P(FAKE).
+- A-V distance.
+- Nhan REAL hoac FAKE.
+
+Diem toan video:
+
+    overall_score = mean(P(FAKE) cua cac doan hop le)
+
+Voi nguong mac dinh 0.5:
+
+    overall_score >= 0.5 -> FAKE
+    overall_score <  0.5 -> REAL
+
+Cac doan bi loai do chuyen canh, khong co mat, thieu frame hoac mat di
+chuyen qua nhieu khong duoc dua vao phep tinh trung binh.
+
+
+14. Tom tat
+----------
+
+    YuNet
+      -> Tim khuon mat va vi tri mieng
+
+    MediaPipe
+      -> Tim 40 diem landmark quanh moi
+
+    ResNet18 3D
+      -> Hoc chuyen dong mieng qua 30 frame
+
+    CNN am thanh
+      -> Hoc dac trung tieng noi
+
+    Attention
+      -> Tap trung vao vung va thoi diem quan trong
+
+    Audio-Visual distance
+      -> Do muc do khong dong bo giua hinh va tieng
+
+    Sigmoid
+      -> Tao xac suat FAKE
+
+Day la mo hinh phat hien deepfake dua tren su bat thuong cua khau hinh
+va su dong bo audio-visual, khong chi dua tren mau sac cua mot frame
+don le.
+
+
+15. De xuat thi nghiem: crop toan mat va crop moi
+--------------------------------------------------
+
+Muc tieu la do anh huong cua vung anh dau vao doi voi cung mot mo hinh FGI,
+giu nguyen nhanh audio. Hai cau hinh can duoc huan luyen rieng:
+
+    A. Face crop: YuNet phat hien mat, mo rong bounding box theo FACE_MARGIN.
+    B. Mouth crop: YuNet + MediaPipe landmark moi, dung LIP_SCALE va
+       fallback theo YuNet neu landmark khong hop le.
+
+Khong the dung checkpoint da train voi mouth crop de suy luan tren face crop
+roi xem do la phep so sanh hop le. Hinh dang va noi dung dau vao model da thay
+doi; moi cau hinh can checkpoint duoc train tu dau hoac tu cung mot checkpoint
+pretrained, theo cung quy tac khoi tao.
+
+De so sanh:
+
+1. Dung cung danh sach video va nhan DFDC cho train, validation va test.
+   Tao split mot lan, khong de cac ban sao/nguon goc cung video hoac cung
+   nguoi noi roi vao nhieu split neu co the nhan dien duoc.
+2. Giu nguyen audio, kien truc, so epoch, optimizer, learning rate,
+   augmentation, batch size va quy tac chon checkpoint; chi thay vung crop.
+3. Ap dung cung seed cho cap chay tuong ung. Tot hon la lap lai voi nhieu seed
+   va bao cao trung binh cung do lech chuan.
+4. Chon nguong tren validation; chi danh gia cuoi cung tren test da khoa.
+5. Bao cao AUC, F1, precision, recall, confusion matrix va so mau hop le/bi
+   bo qua cho moi cau hinh. Neu tap lech lop, bao cao them PR-AUC va balanced
+   accuracy.
+6. Neu co dieu kien, danh gia them tren dataset ngoai ma khong fine-tune hoac
+   chinh nguong tren dataset do; ghi ro quy tac quy doi nhan.
+
+Thiet ke toi thieu la hai checkpoint: FGI-mouth va FGI-face, duoc train rieng
+tren cung split DFDC. De ket luan chac hon, nen co it nhat 3 seed cho moi
+cau hinh va bao cao mean +/- standard deviation. Chi so cua checkpoint hien
+co the duoc dung lam moc tham khao; neu quy trinh huan luyen/split khac thi
+khong nen dat canh truc tiep nhu mot phep ablation co kiem soat.

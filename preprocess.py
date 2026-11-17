@@ -563,6 +563,18 @@ def draw_overlay(
     for f in faces:
         x, y, w, h = f[:4]
         cv2.rectangle(img, (int(x), int(y)), (int(x + w), int(y + h)), (180, 180, 180), 1)
+        try:
+            fx, fy = int(max(0, x - 0.25 * max(w, h))), int(max(0, y - 0.25 * max(w, h)))
+            fx2, fy2 = int(min(W, x + w + 0.25 * max(w, h))), int(min(H, y + h + 0.25 * max(w, h)))
+            pts = _lip_pts(cv2.cvtColor(img[fy:fy2, fx:fx2], cv2.COLOR_BGR2RGB))
+            if pts is not None:
+                lip_pixels = np.column_stack((pts[:, 0] * (fx2 - fx) + fx, pts[:, 1] * (fy2 - fy) + fy))
+                for px, py in lip_pixels:
+                    cv2.circle(img, (int(px), int(py)), 2, (255, 190, 30), -1)
+                hull = cv2.convexHull(lip_pixels.astype(np.float32)).astype(np.int32)
+                cv2.polylines(img, [hull], True, (255, 190, 30), 1)
+        except (ImportError, RuntimeError, ValueError):
+            pass
     if box is not None and score is not None:
         lab = label_for(score, threshold)
         color = (113, 204, 46) if lab == 'REAL' else (60, 76, 231)
@@ -576,4 +588,3 @@ def draw_overlay(
     cv2.rectangle(img, (8, 8), (16 + tw, 18 + th), (0, 0, 0), -1)
     cv2.putText(img, text, (12, 12 + th), cv2.FONT_HERSHEY_SIMPLEX, 0.65, color, 2, cv2.LINE_AA)
     return img
-

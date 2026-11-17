@@ -17,9 +17,22 @@ models/*.pth
 models/*.pth.tar
 models/*.pt
 models/*.task
+models/*/*.pth
+models/*/*.tar
+models/*/*.pt
+models/*/*.task
+models/bestmodels/
+models/*.mp4
+testpbl/*.mp4
+web_uploads/
+web_reports/
 
 # OS / IDE files
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
+
+# Local secrets and database files
+.env
+*.sqlite3

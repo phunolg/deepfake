@@ -71,19 +71,32 @@ YUNET_PATH = os.path.join(MODELS_DIR, YUNET_FILENAME)
 LANDMARKER_PATH = os.path.join(MODELS_DIR, LANDMARKER_FILENAME)
 DEFAULT_CHECKPOINT_FILENAME = 'model_best_epoch23.pth.tar'
 DEFAULT_CHECKPOINT_PATH = os.path.join(MODELS_DIR, DEFAULT_CHECKPOINT_FILENAME)
+FACE_CHECKPOINT_PATH = os.path.join(MODELS_DIR, 'model_best_epoch29.pth.tar')
+MOUTH_CHECKPOINT_PATH = os.path.join(MODELS_DIR, 'bestmodels', 'epoch50.pth')
 
 
 def find_checkpoint_path(custom_path: str | None = None) -> str:
-    """Tìm file checkpoint model: custom_path -> DEFAULT_CHECKPOINT_PATH -> file .pth/.tar bất kỳ trong models/."""
-    if custom_path and os.path.isfile(custom_path):
+    """Tìm checkpoint, gồm cả checkpoint PyTorch đã giải nén thành thư mục."""
+    if custom_path and (os.path.isfile(custom_path) or os.path.isdir(custom_path)):
         return custom_path
     if os.path.isfile(DEFAULT_CHECKPOINT_PATH):
         return DEFAULT_CHECKPOINT_PATH
     if os.path.isdir(MODELS_DIR):
-        for fname in sorted(os.listdir(MODELS_DIR)):
-            fpath = os.path.join(MODELS_DIR, fname)
-            if os.path.isfile(fpath) and any(fname.endswith(ext) for ext in ('.pth', '.tar', '.pt')):
-                return fpath
+        candidates = []
+        for root, dirs, files in os.walk(MODELS_DIR):
+            for fname in files:
+                fpath = os.path.join(root, fname)
+                if any(fname.endswith(ext) for ext in ('.pth', '.tar', '.pt')):
+                    candidates.append(fpath)
+            for dirname in dirs:
+                directory_path = os.path.join(root, dirname)
+                if (
+                    os.path.isfile(os.path.join(directory_path, 'data.pkl'))
+                    and os.path.isfile(os.path.join(directory_path, 'byteorder'))
+                ):
+                    candidates.append(directory_path)
+        if candidates:
+            return sorted(candidates)[0]
     return DEFAULT_CHECKPOINT_PATH
 
 
@@ -106,4 +119,3 @@ REASON_TEXT = {
 COLOR_REAL = '#2ecc71'
 COLOR_FAKE = '#e74c3c'
 COLOR_NA = '#8a8f98'
-

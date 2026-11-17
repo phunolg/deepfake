@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DeepGuard — Phân tích video</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body data-initial-page="{{ active_page|default('page-upload') }}">
+  <main class="site">
+    <nav class="topbar">
+      <a class="wordmark" href="/">DeepGuard</a>
+      <div class="nav-links">
+        <button class="nav-tab active" data-page="page-upload">Kiểm tra video</button>
+        <button class="nav-tab" data-page="page-face-test">Test model cắt môi</button>
+        <button class="nav-tab" data-page="page-report">Báo cáo</button>
+        <button class="nav-tab" data-page="page-limits">Cách hoạt động</button>
+        <button class="nav-tab" data-page="page-support">Liên hệ & hỗ trợ</button>
+        <a class="nav-account" href="#account">{{ current_user.full_name if current_user else "Đăng nhập / Đăng ký" }}</a>
+      </div>
+    </nav>
+
+    <section id="page-upload" class="page active">
+    <section class="hero" id="upload">
+      <div class="hero-copy">
+        <p class="kicker">KIỂM TRA VIDEO · ĐỒNG BỘ KHẨU HÌNH & TIẾNG NÓI</p>
+        <h1>Video này có thật<br>không? Xem từng<br>giây để biết.</h1>
+        <p class="lede">Tải video lên, DeepGuard đối chiếu chuyển động môi với âm thanh trong từng đoạn 1 giây và chỉ ra chính xác đoạn nào đáng ngờ.</p>
+        <div class="hero-actions">
+          <button id="hero-check" class="button button-dark">Kiểm tra video</button>
+          <button id="sample-report" class="button button-light">Xem báo cáo mẫu</button>
+        </div>
+      </div>
+      <div class="upload-box" id="dropzone">
+        <p class="box-label">TẢI VIDEO LÊN</p>
+        <div class="drop-preview">
+          <div class="play-mark">▶</div>
+          <span>Kéo thả, chọn file hoặc dán liên kết video<br><small>MP4 · MOV · AVI · MKV · TỐI ĐA 500 MB</small></span>
+        </div>
+        <input id="video-input" type="file" accept=".mp4,.mov,.avi,.mkv,video/*" hidden>
+        <button id="choose-btn" class="button button-dark upload-button">Chọn tệp từ máy</button>
+        <p class="box-note">Video tối đa 24 giờ. Chỉ giữ kết quả và mã băm.</p>
+      </div>
+    </section>
+
+    <section class="process section-rule" id="process">
+      <p class="kicker">QUY TRÌNH</p>
+      <h2>Ba bước, không hộp đen</h2>
+      <div class="process-grid">
+        <article><span>01</span><h3>Cắt đoạn & lọc</h3><p>Chia video thành đoạn 1 giây, loại đoạn chuyển cảnh hoặc không thấy mặt.</p></article>
+        <article><span>02</span><h3>Nhìn vào miệng</h3><p>Cắt vùng miệng 30 khung hình, tách âm thanh 48 kHz đúng đoạn.</p></article>
+        <article><span>03</span><h3>Đo độ lệch</h3><p>Tính khoảng cách hình–tiếng và xác suất giả cho từng đoạn, rồi lấy trung bình.</p></article>
+      </div>
+    </section>
+
+    <section id="upload-status" class="upload-status hidden">
+      <div class="video-info">
+        <div class="preview-wrap"><video id="preview" controls preload="metadata"></video></div>
+        <div class="metadata">
+          <p class="file-title" id="file-name"></p>
+          <div class="meta-grid" id="metadata-grid"></div>
+          <div class="controls">
+            <label>Ngưỡng FAKE <input id="threshold" type="range" min="5" max="95" value="50"><b id="threshold-value">0.50</b></label>
+            <label>Quét tối đa <input id="max-seconds" type="number" min="1" max="300" value="12"> giây</label>
+            <label>Tối đa đoạn hợp lệ <input id="max-chunks" type="number" min="1" max="300" value="10"></label>
+            <label>Crop <select id="crop-mode"><option value="mouth_lm">Miệng + MediaPipe</option><option value="mouth">Miệng + YuNet</option><option value="face">Toàn khuôn mặt</option></select></label>
+            <label>Model <select id="model-profile"><option value="mouth">Mouth v5 · epoch50</option><option value="face">Face · epoch29</option></select></label>
+          </div>
+          <button id="analyze-btn" class="button button-dark wide">Bắt đầu phân tích</button>
+        </div>
+      </div>
+    </section>
+    <div id="upload-error" class="alert error hidden"></div>
+
+    <section id="progress-panel" class="progress-section hidden">
+      <div class="section-head"><h2>Đang phân tích</h2><span id="progress-text">0%</span></div>
+      <div class="progress-track"><div id="progress-bar"></div></div>
+      <p id="status-message" class="muted"></p>
+    </section>
+    </section>
+
+    <section id="page-face-test" class="page">
+      <section class="model-test section-rule">
+        <p class="kicker">MODEL TEST · MOUTH CROP</p>
+        <h2>Kiểm thử model<br>cắt vùng môi</h2>
+        <p class="model-description">Dùng <b>epoch50.pth</b> với tiền xử lý mouth: YuNet, MediaPipe lấy landmark môi, crop vùng miệng cho 30 frame, resize 224×224 và audio 48 kHz.</p>
+        <div class="model-facts">
+          <div><span class="label">CHECKPOINT</span><strong>epoch 50</strong></div>
+          <div><span class="label">CROP</span><strong>Vùng môi</strong></div>
+          <div><span class="label">INPUT</span><strong>30 frame + 1s audio</strong></div>
+        </div>
+        <button id="face-test-button" class="button button-dark">Chọn video để test model cắt môi</button>
+        <p class="model-hint">Sau khi chọn video, hệ thống sẽ chuyển về màn hình kiểm tra với model epoch50 và crop môi.</p>
+      </section>
+    </section>
+
+    <section id="page-report" class="page">
+    <section id="result-panel" class="report-section section-rule">
+      <p class="kicker">BÁO CÁO MẪU · DỮ LIỆU MINH HỌA</p>
+      <div class="report-heading"><h2>Kết quả đọc được,<br>không chỉ một con số</h2><a id="report-link" class="download" href="#">Tải báo cáo .txt ↓</a></div>
+      <div class="report-layout">
+        <aside class="report-summary">
+          <p class="report-file" id="report-file">VIDEO · KẾT QUẢ PHÂN TÍCH</p>
+          <span class="label">KẾT LUẬN MÔ HÌNH</span>
+          <strong id="overall-label">—</strong>
+          <span class="score" id="overall-score">—</span>
+          <span class="label">ĐIỂM TRUNG BÌNH P(FAKE)</span>
+          <dl><dt>Đoạn hợp lệ</dt><dd id="valid-count">—</dd><dt>A-V distance</dt><dd id="overall-distance">—</dd><dt>Ngưỡng</dt><dd id="report-threshold">0,50</dd><dt>Model</dt><dd id="report-model">epoch50</dd></dl>
+        </aside>
+        <div class="report-visual">
+          <div class="chart-label">P(FAKE) THEO TỪNG GIÂY</div>
+          <div id="timeline" class="timeline"></div>
+          <div class="axis"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span></div>
+          <div class="chart-label">VÙNG MIỆNG MÔ HÌNH NHÌN THẤY · ĐOẠN ĐANG CHỌN</div>
+          <div class="crop-strip" id="crop-strip"></div>
+          <div class="chart-label">KHOẢNG CÁCH HÌNH–TIẾNG (CÀNG ĐẬM CÀNG LỆCH)</div>
+          <div class="distance-strip" id="distance-strip"></div>
+        </div>
+      </div>
+      <div class="segment-detail" id="segment-detail">Chọn một đoạn trên biểu đồ để xem chi tiết.</div>
+      <div class="technical-grid" id="technical-info"></div>
+      <div class="mouth-report">
+        <div class="report-heading mouth-heading">
+          <div><p class="kicker">GIẢI THÍCH TIỀN XỬ LÝ</p><h2>Vùng miệng mô hình đã nhìn thấy</h2></div>
+          <p>YuNet xác định khuôn mặt, MediaPipe xác định landmark môi, sau đó pipeline tạo vùng crop đưa vào model.</p>
+        </div>
+        <div class="mouth-grid">
+          <div class="mouth-main">
+            <p class="chart-label">KHUNG HÌNH GỐC · BOUNDING BOX & CROP</p>
+            <img id="overlay-image" class="overlay-image" alt="Khung hình có bounding box khuôn mặt và vùng crop miệng">
+          </div>
+          <div>
+            <p class="chart-label">CÁC FRAME CROP MẪU · ĐOẠN ĐANG CHỌN</p>
+            <div id="crop-gallery" class="crop-gallery"></div>
+          </div>
+        </div>
+        <p class="mouth-note">Landmark và vùng crop chỉ minh họa cách hệ thống tiền xử lý video; chúng không phải bằng chứng trực tiếp cho thấy video bị deepfake.</p>
+      </div>
+      <div class="av-report">
+        <p class="kicker">PHÂN TÍCH CHUYÊN SÂU</p>
+        <div class="report-heading av-heading">
+          <h2>Đồng bộ hình ảnh<br>và âm thanh</h2>
+          <p>Khoảng cách giữa chuyển động môi và tiếng nói trong từng đoạn 1 giây. Khoảng cách càng lớn, môi và tiếng càng lệch nhau.</p>
+        </div>
+        <div class="av-stats" id="av-stats"></div>
+        <div class="av-grid">
+          <div class="av-chart-panel">
+            <p class="chart-label">A-V DISTANCE THEO TỪNG ĐOẠN</p>
+            <div class="av-line-chart" id="av-line-chart"></div>
+            <p class="chart-note">Điểm đỏ là các đoạn có khoảng cách cao hơn xu hướng tương đối của video, không phải ngưỡng kết luận độc lập.</p>
+          </div>
+          <div class="av-preview-panel">
+            <p class="chart-label">PHÂN TÍCH THEO ĐOẠN ĐANG CHỌN</p>
+            <div class="preview-placeholder">[ẢNH THẬT: khung hình đang chọn, có khung mặt YuNet]</div>
+            <div class="waveform" aria-label="Audio waveform"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <div class="preview-placeholder compact">[CROP MIỆNG 30 KHUNG · ẢNH MINH HỌA]</div>
+          </div>
+        </div>
+        <div class="av-lower-grid">
+          <div class="scatter-panel">
+            <p class="chart-label">P(FAKE) SO VỚI A-V DISTANCE</p>
+            <div class="scatter-chart" id="scatter-chart"></div>
+            <p class="chart-note">Mỗi chấm là một đoạn. Chấm nằm lệch khỏi xu hướng được đánh dấu để xem lại.</p>
+          </div>
+          <div class="av-table-panel">
+            <p class="chart-label">CHI TIẾT TỪNG ĐOẠN</p>
+            <div class="av-table-wrap"><table><thead><tr><th>Đoạn</th><th>A-V dist.</th><th>Δ so đoạn trước</th><th>P(FAKE)</th><th>Trạng thái</th></tr></thead><tbody id="av-table"></tbody></table></div>
+          </div>
+        </div>
+        <p class="av-disclaimer">Các số liệu đồng bộ A–V là chỉ báo tương đối trong video này. Không dùng khoảng cách này như một ngưỡng độc lập để kết luận video giả mạo.</p>
+      </div>
+    </section>
+    </section>
+
+    <section id="page-support" class="page">
+      <section class="support-page section-rule">
+        <p class="kicker">LIÊN HỆ & HỖ TRỢ</p>
+        <div class="support-heading">
+          <div>
+            <h2>Chúng tôi sẵn sàng<br>lắng nghe bạn</h2>
+            <p class="section-intro">Gửi câu hỏi, báo lỗi hoặc phản hồi về kết quả phân tích. Thông tin của bạn giúp DeepGuard cải thiện độ chính xác và trải nghiệm sử dụng.</p>
+          </div>
+          <div class="team-card">
+            <span class="label">NHÓM PHÁT TRIỂN</span>
+            <strong>DeepGuard Team</strong>
+            <p>Phát triển hệ thống phát hiện deepfake audio-visual.</p>
+            <a href="mailto:deepguard.support@example.com">deepguard.support@example.com</a>
+          </div>
+        </div>
+
+        <div class="support-grid">
+          <form class="contact-card" method="post" action="{{ url_for('contact') }}">
+            <span class="label">GỬI YÊU CẦU</span>
+            <h3>Phản hồi hoặc báo lỗi</h3>
+            <label>Loại yêu cầu
+              <select name="request_type">
+                <option>Phản hồi chung</option>
+                <option>Báo lỗi</option>
+                <option>Hỗ trợ kỹ thuật</option>
+                <option>Góp ý kết quả phân tích</option>
+              </select>
+            </label>
+            <label>Họ tên<input name="name" type="text" maxlength="120" required></label>
+            <label>Email<input name="email" type="email" required></label>
+            <label>Nội dung<textarea name="message" rows="6" maxlength="5000" placeholder="Mô tả câu hỏi hoặc lỗi bạn gặp..." required></textarea></label>
+            <button class="button button-dark" type="submit">Gửi yêu cầu</button>
+          </form>
+
+          <div class="guide-card">
+            <span class="label">HƯỚNG DẪN SỬ DỤNG</span>
+            <h3>Phân tích video trong 4 bước</h3>
+            <ol>
+              <li>Chọn <b>Kiểm tra video</b> và tải video có cả hình ảnh lẫn âm thanh.</li>
+              <li>Kiểm tra thông tin video, chọn model và ngưỡng P(FAKE).</li>
+              <li>Bấm <b>Bắt đầu phân tích</b>, sau đó chờ tiến trình hoàn tất.</li>
+              <li>Xem timeline, chọn từng đoạn và tải báo cáo để lưu lại.</li>
+            </ol>
+            <p class="guide-note">Nên dùng video có khuôn mặt rõ, âm thanh đủ lớn và hạn chế chuyển cảnh liên tục để có nhiều đoạn hợp lệ hơn.</p>
+          </div>
+        </div>
+
+        <div class="faq-section">
+          <p class="kicker">CÂU HỎI THƯỜNG GẶP</p>
+          <div class="faq-list">
+            <details open><summary>Video nào được hệ thống hỗ trợ?</summary><p>Hệ thống nhận MP4, MOV, AVI và MKV, tối đa 500 MB. Video cần có cả hình ảnh và âm thanh để phân tích audio-visual.</p></details>
+            <details><summary>Vì sao video của tôi có đoạn bị loại?</summary><p>Đoạn có thể bị loại vì không đủ khuôn mặt, có chuyển cảnh, mặt di chuyển quá nhiều, thiếu frame hoặc thiếu audio. Các đoạn bị loại vẫn được ghi rõ lý do trong báo cáo.</p></details>
+            <details><summary>P(FAKE) cao có chắc chắn là video giả không?</summary><p>Không. P(FAKE) là điểm dự đoán của model, dùng để định hướng kiểm chứng. Kết quả không thay thế giám định hoặc đánh giá của con người.</p></details>
+            <details><summary>Tôi cần gửi gì khi báo lỗi?</summary><p>Hãy gửi email sử dụng, tên file, thời điểm xảy ra lỗi và mô tả thao tác. Không gửi mật khẩu hoặc thông tin nhạy cảm trong nội dung phản hồi.</p></details>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <section id="page-limits" class="page">
+    <section class="how-it-works section-rule" id="limits">
+      <p class="kicker">CÁCH HOẠT ĐỘNG</p>
+      <h2>Không hộp đen: xem từng bước hệ thống phân tích</h2>
+      <p class="section-intro">DeepGuard không chỉ trả về một nhãn. Hệ thống lưu lại dữ liệu trung gian để người dùng hiểu model đã nhìn thấy gì và vì sao một đoạn được đánh giá là đáng chú ý.</p>
+
+      <div class="pipeline-steps">
+        <article class="pipeline-step"><span>01</span><div><h3>Đọc và chia video</h3><p>Video được kiểm tra metadata, audio và chia thành các đoạn dài 1 giây. Mỗi đoạn gồm 30 frame hình ảnh và 1 giây âm thanh mono 48 kHz.</p></div></article>
+        <article class="pipeline-step"><span>02</span><div><h3>Phát hiện khuôn mặt</h3><p>YuNet tìm khuôn mặt trong các frame mẫu. Hệ thống yêu cầu khuôn mặt xuất hiện đủ số frame và loại các đoạn không có mặt hợp lệ.</p></div></article>
+        <article class="pipeline-step"><span>03</span><div><h3>Xác định và crop môi</h3><p>MediaPipe lấy landmark môi, sau đó pipeline tạo vùng crop quanh môi và resize về 224×224. Nếu landmark không dùng được, hệ thống có thể fallback sang crop bằng YuNet.</p></div></article>
+        <article class="pipeline-step"><span>04</span><div><h3>Đối chiếu hình và tiếng</h3><p>Model nhận đồng thời chuỗi 30 frame vùng môi và âm thanh tương ứng. Model học các đặc trưng chuyển động môi, âm thanh và mức đồng bộ giữa hai tín hiệu.</p></div></article>
+        <article class="pipeline-step"><span>05</span><div><h3>Tổng hợp kết quả</h3><p>Mỗi đoạn hợp lệ có điểm P(FAKE), A-V distance và nhãn theo ngưỡng đã chọn. Điểm tổng thể được tính từ các đoạn hợp lệ được phân tích.</p></div></article>
+      </div>
+
+      <div class="explain-grid">
+        <article class="explain-card">
+          <span class="label">P(FAKE) LÀ GÌ?</span>
+          <h3>Xác suất do model dự đoán</h3>
+          <p>Điểm nằm trong khoảng 0 đến 1. Điểm càng cao nghĩa là model nhận thấy nhiều dấu hiệu giống dữ liệu deepfake hơn. Đây không phải phần trăm chắc chắn video là giả.</p>
+          <div class="score-scale"><span>0 · REAL</span><i></i><span>1 · FAKE</span></div>
+        </article>
+        <article class="explain-card">
+          <span class="label">A-V DISTANCE</span>
+          <h3>Khoảng cách hình–tiếng</h3>
+          <p>Chỉ báo mô tả mức lệch giữa chuyển động môi và âm thanh trong cùng đoạn. Chỉ số này được dùng để xem xu hướng tương đối, không phải một ngưỡng kết luận độc lập.</p>
+        </article>
+      </div>
+
+      <div class="skip-section">
+        <p class="kicker">ĐOẠN BỊ LOẠI</p>
+        <h2>Vì sao một số đoạn không có điểm?</h2>
+        <div class="skip-grid">
+          <p><b>Không đủ mặt hợp lệ</b>Không phát hiện được mặt ở ít nhất 60% frame mẫu.</p>
+          <p><b>Chuyển cảnh</b>Hình ảnh thay đổi đột ngột, không phù hợp để theo dõi một khuôn mặt liên tục.</p>
+          <p><b>Mặt di chuyển nhiều</b>Vùng mặt/miệng thay đổi quá lớn hoặc có khả năng đổi người.</p>
+          <p><b>Thiếu frame hoặc audio</b>Không đủ 30 frame hoặc không có âm thanh tương ứng để phân tích.</p>
+        </div>
+      </div>
+
+      <div class="limits">
+        <p class="kicker">GIỚI HẠN MÔ HÌNH</p>
+        <h2>Kết quả cần được kiểm chứng thêm</h2>
+        <div class="limits-grid">
+          <p><b>Là xác suất, không phải bằng chứng.</b> Dùng để định hướng kiểm chứng, không thay thế giám định hoặc đánh giá của con người.</p>
+          <p><b>Cần khuôn mặt và tiếng nói.</b> Video che miệng, không có âm thanh hoặc cắt cảnh liên tục có thể bị loại nhiều đoạn.</p>
+          <p><b>Chỉ xét đồng bộ môi–tiếng.</b> Giọng giả nguyên hình, hoặc đổi mặt nhưng giữ nguyên khẩu hình, có thể khó phát hiện.</p>
+        </div>
+      </div>
+    </section>
+    </section>
+
+    <section id="account" class="account-section section-rule">
+      <p class="kicker">TÀI KHOẢN</p>
+      {% if auth_error %}<div class="alert error">{{ auth_error }}</div>{% endif %}
+      {% if contact_message %}<div class="alert success">{{ contact_message }}</div>{% endif %}
+      {% if current_user %}
+      <div class="account-card">
+        <div>
+          <span class="label">ĐÃ ĐĂNG NHẬP</span>
+          <h2>Xin chào, {{ current_user.full_name }}</h2>
+          <p class="muted">{{ current_user.email }}</p>
+        </div>
+        <form method="post" action="{{ url_for('logout') }}"><button class="button button-light" type="submit">Đăng xuất</button></form>
+      </div>
+      {% else %}
+      <div class="auth-grid">
+        <form class="auth-card" method="post" action="{{ url_for('login') }}">
+          <h2>Đăng nhập</h2>
+          <label>Email<input name="email" type="email" autocomplete="email" required></label>
+          <label>Mật khẩu<input name="password" type="password" autocomplete="current-password" required></label>
+          <button class="button button-dark" type="submit">Đăng nhập</button>
+          <a class="auth-link" href="{{ url_for('forgot_password') }}">Quên mật khẩu?</a>
+        </form>
+        <form class="auth-card" method="post" action="{{ url_for('register') }}">
+          <h2>Tạo tài khoản</h2>
+          <label>Họ tên<input name="full_name" type="text" maxlength="120" required></label>
+          <label>Email<input name="email" type="email" autocomplete="email" required></label>
+          <label>Mật khẩu<input name="password" type="password" minlength="8" autocomplete="new-password" required></label>
+          <label>Nhập lại mật khẩu<input name="password_confirmation" type="password" minlength="8" autocomplete="new-password" required></label>
+          <label class="checkbox-label"><input name="accept_terms" type="checkbox" required> Tôi đồng ý điều khoản sử dụng.</label>
+          <button class="button button-dark" type="submit">Đăng ký</button>
+        </form>
+      </div>
+      {% endif %}
+    </section>
+
+    <section id="contact" class="contact-section section-rule">
+      <p class="kicker">LIÊN HỆ</p>
+      <div class="contact-grid">
+        <div><h2>Cần hỗ trợ?</h2><p class="muted">Gửi câu hỏi hoặc phản hồi về kết quả phân tích cho đội ngũ DeepGuard.</p></div>
+        <form class="contact-card" method="post" action="{{ url_for('contact') }}">
+          <label>Họ tên<input name="name" type="text" maxlength="120" required></label>
+          <label>Email<input name="email" type="email" required></label>
+          <label>Nội dung<textarea name="message" rows="5" maxlength="5000" required></textarea></label>
+          <button class="button button-dark" type="submit">Gửi liên hệ</button>
+        </form>
+      </div>
+    </section>
+
+    <footer><span>© DeepGuard</span><span><a href="#contact">Liên hệ</a> · Điều khoản · Quyền riêng tư</span></footer>
+  </main>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

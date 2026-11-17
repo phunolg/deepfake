@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Đăng nhập — DeepGuard</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="auth-page">
+    <a class="wordmark" href="/">DeepGuard</a>
+    <form class="auth-card auth-form" method="post">
+      <p class="kicker">TÀI KHOẢN</p>
+      <h1>Đăng nhập</h1>
+      {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+      {% if message %}<div class="alert success">{{ message }}</div>{% endif %}
+      <label>Email<input name="email" type="email" autocomplete="email" required></label>
+      <label>Mật khẩu<input name="password" type="password" autocomplete="current-password" required></label>
+      <label class="checkbox-label"><input name="remember" type="checkbox"> Ghi nhớ đăng nhập trong 30 ngày</label>
+      <button class="button button-dark" type="submit">Đăng nhập</button>
+      <a class="auth-link" href="{{ url_for('forgot_password') }}">Quên mật khẩu?</a>
+      <p class="auth-link">Chưa có tài khoản? <a href="{{ url_for('register') }}">Đăng ký</a></p>
+    </form>
+  </main>
+</body>
+</html>

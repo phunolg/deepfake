@@ -6,7 +6,9 @@ Hỗ trợ nạp checkpoint `.pth` / `.pth.tar`, xử lý video theo đúng quy 
 from __future__ import annotations
 
 import os
+import shutil
 import tempfile
+import zipfile
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -39,16 +41,33 @@ def load_checkpoint(
         device = get_device()
 
     target_path = C.find_checkpoint_path(ckpt_path)
-    if not os.path.isfile(target_path):
+    if not os.path.isfile(target_path) and not os.path.isdir(target_path):
         raise FileNotFoundError(
             f"Không tìm thấy file checkpoint tại: {target_path}.\n"
             f"Vui lòng chọn file model (.pth hoặc .pth.tar) hoặc đặt vào thư mục: {C.MODELS_DIR}"
         )
 
+    load_path = target_path
+    temp_checkpoint = None
+    if os.path.isdir(target_path):
+        temp_checkpoint = tempfile.NamedTemporaryFile(suffix='.pth', delete=False)
+        temp_checkpoint.close()
+        with zipfile.ZipFile(temp_checkpoint.name, 'w', compression=zipfile.ZIP_STORED,
+                             strict_timestamps=False) as archive:
+            for root, _, files in os.walk(target_path):
+                for filename in files:
+                    source = os.path.join(root, filename)
+                    relative = os.path.relpath(source, target_path).replace(os.sep, '/')
+                    archive.write(source, f'archive/{relative}')
+        load_path = temp_checkpoint.name
+
     try:
-        raw_checkpoint = torch.load(target_path, map_location=device, weights_only=False)
+        raw_checkpoint = torch.load(load_path, map_location=device, weights_only=False)
     except TypeError:
-        raw_checkpoint = torch.load(target_path, map_location=device)
+        raw_checkpoint = torch.load(load_path, map_location=device)
+    finally:
+        if temp_checkpoint is not None:
+            os.unlink(temp_checkpoint.name)
 
     info: Dict[str, Any] = {'path': target_path}
     cfg_dict: Dict[str, Any] = {}
@@ -259,4 +278,3 @@ def predict_video(
         'threshold': threshold,
         'device': str(device),
     }
-
