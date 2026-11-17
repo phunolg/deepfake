@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="vi">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Phân tích video — DeepGuard</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"></head>
+<head><meta name="csrf-token" content="{{ csrf_token() }}"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Phân tích video — DeepGuard</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"></head>
 <body>
   <main class="site"><nav class="topbar"><a class="wordmark" href="/">DeepGuard</a><div class="nav-links">{% if not shared %}<a class="nav-account" href="{{ url_for('dashboard') }}">Dashboard</a><a class="nav-account" href="{{ url_for('latest_analysis') }}">Kết quả</a><a class="nav-account" href="{{ url_for('history') }}">Lịch sử</a>{% endif %}</div></nav>
   <section class="section-rule report-page">
@@ -15,6 +15,6 @@
     <div class="table-scroll"><table class="data-table"><thead><tr><th>Đoạn</th><th>P(FAKE)</th><th>A-V distance</th><th>Nhãn</th><th>Trạng thái / lý do</th></tr></thead><tbody>{% for chunk in result.chunks %}<tr><td>{{ chunk.start }}–{{ chunk.end }}s</td><td>{{ '%.4f'|format(chunk.score) if chunk.score is not none else '—' }}</td><td>{{ '%.4f'|format(chunk.distance) if chunk.distance is not none else '—' }}</td><td>{{ chunk.label }}</td><td>{{ chunk.reason if chunk.status == 'skipped' else 'Hợp lệ' }}</td></tr>{% endfor %}</tbody></table></div>
     <p class="report-disclaimer">Kết quả là dự đoán của mô hình, không phải bằng chứng pháp lý tuyệt đối.</p>
   </section></main>
-  {% if not shared %}<script>document.getElementById("share-report").onclick = async () => { const r = await fetch("{{ url_for('create_report_share', job_id=job.id) }}", {method:"POST"}); const data = await r.json(); document.getElementById("share-result").textContent = data.url || data.error; };</script>{% endif %}
+  {% if not shared %}<script>document.getElementById("share-report").onclick = async () => { const r = await fetch("{{ url_for('create_report_share', job_id=job.id) }}", {method:"POST", headers:{"X-CSRFToken":document.querySelector('meta[name="csrf-token"]').content}}); const data = await r.json(); document.getElementById("share-result").textContent = data.url || data.error; };</script>{% endif %}
 </body>
 </html>

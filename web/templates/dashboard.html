@@ -3,7 +3,7 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Dashboard — DeepGuard</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"></head>
 <body>
   <main class="site">
-    <nav class="topbar"><a class="wordmark" href="/">DeepGuard</a><div class="nav-links"><a class="nav-account" href="{{ url_for('latest_analysis') }}">Kết quả</a><a class="nav-account" href="{{ url_for('history') }}">Lịch sử</a><a class="nav-account" href="{{ url_for('settings') }}">Tài khoản</a><form method="post" action="{{ url_for('logout') }}"><button class="nav-tab" type="submit">Đăng xuất</button></form></div></nav>
+    <nav class="topbar"><a class="wordmark" href="/">DeepGuard</a><div class="nav-links"><a class="nav-account" href="{{ url_for('latest_analysis') }}">Kết quả</a><a class="nav-account" href="{{ url_for('history') }}">Lịch sử</a><a class="nav-account" href="{{ url_for('settings') }}">Tài khoản</a><form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="nav-tab" type="submit">Đăng xuất</button></form></div></nav>
     <section class="section-rule dashboard-page">
       <p class="kicker">TỔNG QUAN CÁ NHÂN</p>
       <div class="dashboard-heading"><div><h1>Dashboard</h1><p class="section-intro">Theo dõi các video bạn đã phân tích và mở lại báo cáo bất cứ lúc nào.</p></div><a class="button button-dark" href="/">Upload video mới</a></div>

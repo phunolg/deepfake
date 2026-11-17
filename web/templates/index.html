@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>DeepGuard — Phân tích video</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -20,7 +21,7 @@
         {% if current_user %}
           <a class="nav-account" href="{{ url_for('dashboard') }}">Dashboard</a>
           <a class="nav-account" href="{{ url_for('latest_analysis') }}">Kết quả</a>
-          <form method="post" action="{{ url_for('logout') }}"><button class="nav-tab" type="submit">Đăng xuất</button></form>
+          <form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="nav-tab" type="submit">Đăng xuất</button></form>
         {% else %}
           <a class="nav-account" href="{{ url_for('login') }}">Đăng nhập</a>
           <a class="button button-dark nav-register" href="{{ url_for('register') }}">Đăng ký</a>
@@ -40,18 +41,18 @@
           <h2>Xin chào, {{ current_user.full_name }}</h2>
           <p class="muted">{{ current_user.email }}</p>
         </div>
-        <form method="post" action="{{ url_for('logout') }}"><button class="button button-light" type="submit">Đăng xuất</button></form>
+        <form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="button button-light" type="submit">Đăng xuất</button></form>
       </div>
       {% else %}
       <div class="auth-grid">
-        <form class="auth-card" method="post" action="{{ url_for('login') }}">
+        <form class="auth-card" method="post" action="{{ url_for('login') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <h2>Đăng nhập</h2>
           <label>Email<input name="email" type="email" autocomplete="email" required></label>
           <label>Mật khẩu<input name="password" type="password" autocomplete="current-password" required></label>
           <button class="button button-dark" type="submit">Đăng nhập</button>
           <a class="auth-link" href="{{ url_for('forgot_password') }}">Quên mật khẩu?</a>
         </form>
-        <form class="auth-card" method="post" action="{{ url_for('register') }}">
+        <form class="auth-card" method="post" action="{{ url_for('register') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <h2>Tạo tài khoản</h2>
           <label>Họ tên<input name="full_name" type="text" maxlength="120" required></label>
           <label>Email<input name="email" type="email" autocomplete="new-password" required></label>
@@ -239,7 +240,7 @@
         </div>
 
         <div class="support-grid">
-          <form class="contact-card" method="post" action="{{ url_for('contact') }}">
+          <form class="contact-card" method="post" action="{{ url_for('contact') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <span class="label">GỬI YÊU CẦU</span>
             <h3>Phản hồi hoặc báo lỗi</h3>
             <label>Loại yêu cầu
@@ -336,7 +337,7 @@
       <p class="kicker">LIÊN HỆ</p>
       <div class="contact-grid">
         <div><h2>Cần hỗ trợ?</h2><p class="muted">Gửi câu hỏi hoặc phản hồi về kết quả phân tích cho đội ngũ DeepGuard.</p></div>
-        <form class="contact-card" method="post" action="{{ url_for('contact') }}">
+        <form class="contact-card" method="post" action="{{ url_for('contact') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <label>Họ tên<input name="name" type="text" maxlength="120" required></label>
           <label>Email<input name="email" type="email" required></label>
           <label>Nội dung<textarea name="message" rows="5" maxlength="5000" required></textarea></label>

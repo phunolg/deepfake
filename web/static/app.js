@@ -19,6 +19,10 @@ function formatSeconds(value) {
   return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 function meta(label, value) { return `<div class="meta-item"><span>${label}</span><b>${value}</b></div>`; }
+function csrfHeaders(extra = {}) {
+  const token = document.querySelector('meta[name="csrf-token"]')?.content || "";
+  return { ...extra, "X-CSRFToken": token };
+}
 
 async function uploadVideo(file) {
   clearError();
@@ -28,7 +32,7 @@ async function uploadVideo(file) {
   $("choose-btn").disabled = true;
   $("choose-btn").textContent = "Đang kiểm tra...";
   try {
-    const response = await fetch("/api/upload", { method:"POST", body:form });
+    const response = await fetch("/api/upload", { method:"POST", headers:csrfHeaders(), body:form });
     const data = await response.json();
     if (response.status === 401) { window.location.href = "/login?next=/"; return; }
     if (!response.ok) throw new Error(data.error || "Upload thất bại.");
@@ -60,7 +64,7 @@ async function startAnalysis() {
   $("progress-bar").style.width = "0%";
   $("progress-text").textContent = "0%";
   const response = await fetch("/api/analyze", {
-    method:"POST", headers:{"Content-Type":"application/json"},
+    method:"POST", headers:csrfHeaders({"Content-Type":"application/json"}),
     body: JSON.stringify({
       upload_id: upload.upload_id, filename: upload.filename,
       threshold: Number($("threshold").value) / 100,

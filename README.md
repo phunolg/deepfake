@@ -1,5 +1,13 @@
 # Train_deepfake
 
+## Deploy on Render
+
+The repository includes `render.yaml` with the Python web service build and Gunicorn start commands. Connect this repository to Render as a Blueprint, then provide `DATABASE_URL` for PostgreSQL. Render generates `DEEPGUARD_SECRET_KEY`; HTTPS session cookies are enabled for production.
+
+The application can also use the individual `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` variables instead of `DATABASE_URL`.
+
+Model checkpoints and uploaded videos are not stored in Git. The web interface can start without checkpoints, but video analysis needs the checkpoint files from `models/` installed on the service. Render's local filesystem is ephemeral, so use persistent storage or object storage if uploads and reports must survive restarts.
+
 ## Chạy nền tảng web
 
 Mở PowerShell tại thư mục `Train_deepfake` và chạy:
@@ -7,6 +15,8 @@ Mở PowerShell tại thư mục `Train_deepfake` và chạy:
 ```powershell
 python web_app.py
 ```
+
+Install the web dependencies with `pip install -r requirements.txt`. To run the desktop GUI, install `pip install -r requirements-desktop.txt`.
 
 Sau đó mở `http://127.0.0.1:5000`. Có thể dùng `run_web.bat` để khởi động nhanh.
 
@@ -24,7 +34,7 @@ lý do đoạn video bị loại.
 Cài thư viện bổ sung:
 
 ```powershell
-pip install -r requirements-postgres.txt
+pip install -r requirements.txt
 ```
 
 Tạo file `.env` từ `.env.example`, sau đó điền mật khẩu PostgreSQL. Chạy:

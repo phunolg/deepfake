@@ -10,6 +10,10 @@ from dotenv import load_dotenv
 def connect_postgres() -> psycopg.Connection:
     """Mở kết nối PostgreSQL bằng cấu hình trong môi trường."""
     load_dotenv()
+    database_url = os.getenv("DATABASE_URL")
+    if database_url:
+        return psycopg.connect(database_url)
+
     required = {
         "POSTGRES_HOST": os.getenv("POSTGRES_HOST"),
         "POSTGRES_PORT": os.getenv("POSTGRES_PORT"),

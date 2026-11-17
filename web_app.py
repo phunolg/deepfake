@@ -27,6 +27,7 @@ from psycopg.errors import UniqueViolation
 from psycopg.rows import dict_row
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 import config as C
 import cv2
@@ -44,8 +45,12 @@ ALLOWED_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv"}
 MAX_UPLOAD_BYTES = 500 * 1024 * 1024
 
 app = Flask(__name__, template_folder="web/templates", static_folder="web/static")
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
 app.config["SECRET_KEY"] = os.environ.get("DEEPGUARD_SECRET_KEY", secrets.token_hex(32))
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = os.getenv("SESSION_COOKIE_SECURE", "false").lower() in {"1", "true", "yes"}
 app.permanent_session_lifetime = timedelta(days=30)
 
 jobs: Dict[str, Dict[str, Any]] = {}
@@ -120,6 +125,7 @@ def _init_database() -> None:
             );
             ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE;
             ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name TEXT;
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;
             ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
             ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TEXT;
             ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
@@ -143,11 +149,22 @@ _init_database()
 
 @app.context_processor
 def inject_current_user() -> Dict[str, Any]:
-    return {"current_user": session.get("user")}
+    return {
+        "current_user": session.get("user"),
+        "csrf_token": lambda: session.get("_csrf_token", ""),
+    }
 
 
 @app.before_request
 def validate_session_version():
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+        expected = session.get("_csrf_token")
+        supplied = request.headers.get("X-CSRFToken") or request.form.get("csrf_token")
+        if not expected or not supplied or not secrets.compare_digest(expected, supplied):
+            return jsonify(error="Yêu cầu không hợp lệ. Hãy tải lại trang và thử lại."), 400
+    elif not session.get("_csrf_token"):
+        session["_csrf_token"] = secrets.token_urlsafe(32)
+
     if not session.get("user") or request.endpoint == "static":
         return None
     with _get_db() as connection:
@@ -193,7 +210,10 @@ def _send_email(recipient: str, subject: str, body: str) -> None:
     smtp_password = os.getenv("SMTP_PASSWORD")
     smtp_from = os.getenv("SMTP_FROM", smtp_user or "no-reply@deepguard.local")
     if not smtp_host or not smtp_user or not smtp_password:
-        logger.warning("SMTP chưa cấu hình. Link email dành cho local test: %s", body.splitlines()[-1])
+        if os.getenv('APP_ENV', 'development').lower() == 'development':
+            logger.warning('SMTP chưa cấu hình. Link email dành cho local test: %s', body.splitlines()[-1])
+        else:
+            logger.error('SMTP chưa cấu hình; bỏ qua gửi email.')
         return
     message = EmailMessage()
     message["Subject"] = subject
@@ -639,7 +659,7 @@ def reset_password():
         if password != confirmation:
             return render_template("reset_password.html", token=token, error="Mật khẩu xác nhận không khớp.")
         connection.execute(
-            "UPDATE users SET password_hash = %s WHERE id = %s",
+            "UPDATE users SET password_hash = %s, session_version = session_version + 1 WHERE id = %s",
             (generate_password_hash(password), reset["user_id"]),
         )
         connection.execute("UPDATE password_reset_tokens SET used_at = NOW() WHERE id = %s", (reset["id"],))
@@ -923,8 +943,14 @@ def settings():
             if action == "profile":
                 full_name = request.form.get("full_name", "").strip()
                 email = request.form.get("email", "").strip().lower()
-                if not full_name or not _valid_email(email):
+                if not full_name or len(full_name) > 120 or not _valid_email(email):
                     return render_template("settings.html", user=user, error="Họ tên hoặc email không hợp lệ.")
+                duplicate = connection.execute(
+                    "SELECT 1 FROM users WHERE LOWER(email) = LOWER(%s) AND id <> %s",
+                    (email, user_id),
+                ).fetchone()
+                if duplicate:
+                    return render_template("settings.html", user=user, error="Email này đã được sử dụng.")
                 avatar_url = user["avatar_url"]
                 avatar = request.files.get("avatar")
                 if avatar and avatar.filename:
@@ -947,8 +973,10 @@ def settings():
                 new_password = request.form.get("new_password", "")
                 if len(new_password) < 8 or new_password != request.form.get("password_confirmation", ""):
                     return render_template("settings.html", user=user, error="Mật khẩu mới không hợp lệ.")
-                connection.execute("UPDATE users SET password_hash = %s WHERE id = %s",
+                connection.execute("UPDATE users SET password_hash = %s, session_version = session_version + 1 WHERE id = %s",
                                    (generate_password_hash(new_password), user_id))
+                session.clear()
+                return redirect(url_for("login"))
             elif action == "notifications":
                 enabled = request.form.get("notifications") == "on"
                 connection.execute("UPDATE users SET notifications_enabled = %s WHERE id = %s", (enabled, user_id))
@@ -1277,6 +1305,7 @@ def download_report(job_id: str):
 
 
 @app.get("/media/<path:filename>")
+@login_required
 def media(filename: str):
     return send_from_directory(UPLOAD_DIR, filename)
 
@@ -1291,4 +1320,4 @@ def artifacts(job_id: str, filename: str):
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=False)
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")), debug=False)
