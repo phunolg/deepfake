@@ -2,11 +2,13 @@
 
 ## Deploy on Render
 
-The repository includes `render.yaml` with the Python web service build and Gunicorn start commands. Connect this repository to Render as a Blueprint, then provide `DATABASE_URL` for PostgreSQL. Render generates `DEEPGUARD_SECRET_KEY`; HTTPS session cookies are enabled for production.
+The repository includes `render.yaml` for a Free Render web service and Free PostgreSQL database. Connect this repository to Render as a Blueprint. Render generates `DEEPGUARD_SECRET_KEY`; HTTPS session cookies are enabled for production. Configure `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM` with an email provider that supports port 2525 so registration and password reset emails can be sent.
 
 The application can also use the individual `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` variables instead of `DATABASE_URL`.
 
 Model checkpoints and uploaded videos are not stored in Git. The web interface can start without checkpoints, but video analysis needs the checkpoint files from `models/` installed on the service. Render's local filesystem is ephemeral, so use persistent storage or object storage if uploads and reports must survive restarts.
+
+Render's Free web service sleeps after 15 minutes without traffic and has 512 MB RAM. Free PostgreSQL is limited to 1 GB and expires after 30 days. This setup is suitable for a demo; uploaded files disappear after restarts, and video inference may exceed the free service's memory limit.
 
 ## Chạy nền tảng web
 

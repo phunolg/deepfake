@@ -2,11 +2,14 @@ services:
   - type: web
     name: deepguard
     runtime: python
+    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 120 web_app:app
     envVars:
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: deepguard-db
+          property: connectionString
       - key: DEEPGUARD_SECRET_KEY
         generateValue: true
       - key: SESSION_COOKIE_SECURE
@@ -16,10 +19,16 @@ services:
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT
-        value: "587"
+        value: "2525"
       - key: SMTP_USER
         sync: false
       - key: SMTP_PASSWORD
         sync: false
       - key: SMTP_FROM
         sync: false
+
+databases:
+  - name: deepguard-db
+    plan: free
+    databaseName: deepguard
+    user: deepguard
