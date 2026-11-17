@@ -204,7 +204,7 @@ def _absolute_url(endpoint: str, **values: Any) -> str:
     return f"{base_url}{url_for(endpoint, **values)}"
 
 
-def _send_email(recipient: str, subject: str, body: str) -> None:
+def _send_email(recipient: str, subject: str, body: str) -> bool:
     smtp_host = os.getenv("SMTP_HOST")
     smtp_user = os.getenv("SMTP_USER")
     smtp_password = os.getenv("SMTP_PASSWORD")
@@ -214,16 +214,21 @@ def _send_email(recipient: str, subject: str, body: str) -> None:
             logger.warning('SMTP chưa cấu hình. Link email dành cho local test: %s', body.splitlines()[-1])
         else:
             logger.error('SMTP chưa cấu hình; bỏ qua gửi email.')
-        return
+        return False
     message = EmailMessage()
     message["Subject"] = subject
     message["From"] = smtp_from
     message["To"] = recipient
     message.set_content(body)
-    with smtplib.SMTP(smtp_host, int(os.getenv("SMTP_PORT", "587")), timeout=15) as smtp:
-        smtp.starttls()
-        smtp.login(smtp_user, smtp_password)
-        smtp.send_message(message)
+    try:
+        with smtplib.SMTP(smtp_host, int(os.getenv("SMTP_PORT", "2525")), timeout=15) as smtp:
+            smtp.starttls()
+            smtp.login(smtp_user, smtp_password)
+            smtp.send_message(message)
+        return True
+    except (OSError, smtplib.SMTPException, ValueError):
+        logger.exception("SMTP delivery failed for %s", recipient)
+        return False
 
 
 def login_required(view):
@@ -542,12 +547,14 @@ def register():
         return render_template("register.html", error="Email này đã được đăng ký.")
 
     verification_url = _absolute_url("verify_email", token=token)
-    _send_email(
+    email_sent = _send_email(
         email,
         "Xác thực tài khoản DeepGuard",
         f"Xin chào {full_name},\n\nBấm vào liên kết sau để xác thực email:\n{verification_url}",
     )
-    return render_template("login.html", message="Tài khoản đã tạo. Hãy kiểm tra email để xác thực trước khi đăng nhập.")
+    if email_sent:
+        return render_template("login.html", message="Tài khoản đã tạo. Hãy kiểm tra email để xác thực trước khi đăng nhập.")
+    return render_template("login.html", error="Tài khoản đã tạo nhưng chưa gửi được email xác thực. Hãy kiểm tra cấu hình email hoặc thử đăng nhập lại sau.")
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -564,7 +571,25 @@ def login():
     if user is None or not user["password_hash"] or not check_password_hash(user["password_hash"], password):
         return render_template("login.html", error="Email hoặc mật khẩu không đúng.")
     if not user["email_verified"]:
-        return render_template("login.html", error="Bạn cần xác thực email trước khi đăng nhập.")
+        token = secrets.token_urlsafe(32)
+        with _get_db() as connection:
+            connection.execute(
+                "UPDATE email_verification_tokens SET used_at = NOW() WHERE user_id = %s AND used_at IS NULL",
+                (user["id"],),
+            )
+            connection.execute(
+                "INSERT INTO email_verification_tokens (user_id, token_hash, expires_at) VALUES (%s, %s, %s)",
+                (user["id"], _token_hash(token), datetime.now(timezone.utc) + timedelta(hours=24)),
+            )
+        verification_url = _absolute_url("verify_email", token=token)
+        email_sent = _send_email(
+            user["email"],
+            "Xác thực tài khoản DeepGuard",
+            f"Xin chào {user['full_name']},\n\nBấm vào liên kết sau để xác thực email:\n{verification_url}",
+        )
+        if email_sent:
+            return render_template("login.html", message="Email tài khoản chưa được xác thực. DeepGuard đã gửi link xác minh mới; hãy kiểm tra hộp thư và thư rác.")
+        return render_template("login.html", error="Bạn cần xác thực email trước khi đăng nhập, nhưng DeepGuard chưa gửi được email. Hãy thử lại sau.")
     if not user["is_active"]:
         return render_template("login.html", error="Tài khoản đang bị khóa. Vui lòng liên hệ quản trị viên.")
 

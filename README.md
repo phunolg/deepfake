@@ -2,7 +2,7 @@
 
 ## Deploy on Render
 
-The repository includes `render.yaml` for a Free Render web service and Free PostgreSQL database. Connect this repository to Render as a Blueprint. Render generates `DEEPGUARD_SECRET_KEY`; HTTPS session cookies are enabled for production. Configure `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM` with an email provider that supports port 2525 so registration and password reset emails can be sent.
+The repository includes `render.yaml` for a Free Render web service and Free PostgreSQL database. Connect this repository to Render as a Blueprint. Render generates `DEEPGUARD_SECRET_KEY`; HTTPS session cookies are enabled for production. Configure `SMTP_HOST`, `SMTP_PORT=2525`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM` with an email provider that supports port 2525 so registration, verification, and password reset emails can be sent. Do not include trailing backslashes in these values. An unverified user who enters the correct password on the login page will receive a fresh verification email.
 
 The application can also use the individual `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` variables instead of `DATABASE_URL`.
 
