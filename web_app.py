@@ -10,12 +10,10 @@ import math
 import os
 import re
 import secrets
-import smtplib
 import shutil
 import threading
 import uuid
 from datetime import datetime, timedelta, timezone
-from email.message import EmailMessage
 from functools import wraps
 from pathlib import Path
 from typing import Any, Dict
@@ -202,33 +200,6 @@ def _token_hash(token: str) -> str:
 def _absolute_url(endpoint: str, **values: Any) -> str:
     base_url = os.getenv("APP_BASE_URL", request.url_root.rstrip("/"))
     return f"{base_url}{url_for(endpoint, **values)}"
-
-
-def _send_email(recipient: str, subject: str, body: str) -> bool:
-    smtp_host = os.getenv("SMTP_HOST")
-    smtp_user = os.getenv("SMTP_USER")
-    smtp_password = os.getenv("SMTP_PASSWORD")
-    smtp_from = os.getenv("SMTP_FROM", smtp_user or "no-reply@deepguard.local")
-    if not smtp_host or not smtp_user or not smtp_password:
-        if os.getenv('APP_ENV', 'development').lower() == 'development':
-            logger.warning('SMTP chưa cấu hình. Link email dành cho local test: %s', body.splitlines()[-1])
-        else:
-            logger.error('SMTP chưa cấu hình; bỏ qua gửi email.')
-        return False
-    message = EmailMessage()
-    message["Subject"] = subject
-    message["From"] = smtp_from
-    message["To"] = recipient
-    message.set_content(body)
-    try:
-        with smtplib.SMTP(smtp_host, int(os.getenv("SMTP_PORT", "2525")), timeout=15) as smtp:
-            smtp.starttls()
-            smtp.login(smtp_user, smtp_password)
-            smtp.send_message(message)
-        return True
-    except (OSError, smtplib.SMTPException, ValueError):
-        logger.exception("SMTP delivery failed for %s", recipient)
-        return False
 
 
 def login_required(view):
@@ -529,32 +500,14 @@ def register():
             cursor = connection.execute(
                 """
                 INSERT INTO users (full_name, email, password_hash, email_verified, created_at)
-                VALUES (%s, %s, %s, FALSE, %s)
+                VALUES (%s, %s, %s, TRUE, %s)
                 RETURNING id
                 """,
                 (full_name, email, generate_password_hash(password), datetime.now(timezone.utc).isoformat()),
             )
-            user_id = cursor.fetchone()["id"]
-            token = secrets.token_urlsafe(32)
-            connection.execute(
-                """
-                INSERT INTO email_verification_tokens (user_id, token_hash, expires_at)
-                VALUES (%s, %s, %s)
-                """,
-                (user_id, _token_hash(token), datetime.now(timezone.utc) + timedelta(hours=24)),
-            )
     except UniqueViolation:
         return render_template("register.html", error="Email này đã được đăng ký.")
-
-    verification_url = _absolute_url("verify_email", token=token)
-    email_sent = _send_email(
-        email,
-        "Xác thực tài khoản DeepGuard",
-        f"Xin chào {full_name},\n\nBấm vào liên kết sau để xác thực email:\n{verification_url}",
-    )
-    if email_sent:
-        return render_template("login.html", message="Tài khoản đã tạo. Hãy kiểm tra email để xác thực trước khi đăng nhập.")
-    return render_template("login.html", error="Tài khoản đã tạo nhưng chưa gửi được email xác thực. Hãy kiểm tra cấu hình email hoặc thử đăng nhập lại sau.")
+    return render_template("login.html", message="Tài khoản đã tạo. Bạn có thể đăng nhập ngay.")
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -565,31 +518,11 @@ def login():
     password = request.form.get("password", "")
     with _get_db() as connection:
         user = connection.execute(
-            "SELECT id, full_name, email, password_hash, email_verified, session_version, role, is_active FROM users WHERE email = %s",
+            "SELECT id, full_name, email, password_hash, session_version, role, is_active FROM users WHERE email = %s",
             (email,),
         ).fetchone()
     if user is None or not user["password_hash"] or not check_password_hash(user["password_hash"], password):
         return render_template("login.html", error="Email hoặc mật khẩu không đúng.")
-    if not user["email_verified"]:
-        token = secrets.token_urlsafe(32)
-        with _get_db() as connection:
-            connection.execute(
-                "UPDATE email_verification_tokens SET used_at = NOW() WHERE user_id = %s AND used_at IS NULL",
-                (user["id"],),
-            )
-            connection.execute(
-                "INSERT INTO email_verification_tokens (user_id, token_hash, expires_at) VALUES (%s, %s, %s)",
-                (user["id"], _token_hash(token), datetime.now(timezone.utc) + timedelta(hours=24)),
-            )
-        verification_url = _absolute_url("verify_email", token=token)
-        email_sent = _send_email(
-            user["email"],
-            "Xác thực tài khoản DeepGuard",
-            f"Xin chào {user['full_name']},\n\nBấm vào liên kết sau để xác thực email:\n{verification_url}",
-        )
-        if email_sent:
-            return render_template("login.html", message="Email tài khoản chưa được xác thực. DeepGuard đã gửi link xác minh mới; hãy kiểm tra hộp thư và thư rác.")
-        return render_template("login.html", error="Bạn cần xác thực email trước khi đăng nhập, nhưng DeepGuard chưa gửi được email. Hãy thử lại sau.")
     if not user["is_active"]:
         return render_template("login.html", error="Tài khoản đang bị khóa. Vui lòng liên hệ quản trị viên.")
 
@@ -614,51 +547,11 @@ def logout():
     return redirect(url_for("index"))
 
 
-@app.get("/verify-email")
-def verify_email():
-    token = request.args.get("token", "")
-    with _get_db() as connection:
-        row = connection.execute(
-            """
-            SELECT id, user_id FROM email_verification_tokens
-            WHERE token_hash = %s AND used_at IS NULL AND expires_at > NOW()
-            """,
-            (_token_hash(token),),
-        ).fetchone()
-        if row is None:
-            return render_template("login.html", error="Liên kết xác thực không hợp lệ hoặc đã hết hạn.")
-        connection.execute("UPDATE users SET email_verified = TRUE WHERE id = %s", (row["user_id"],))
-        connection.execute("UPDATE email_verification_tokens SET used_at = NOW() WHERE id = %s", (row["id"],))
-    return render_template("login.html", message="Email đã được xác thực. Bạn có thể đăng nhập.")
-
-
 @app.route("/forgot-password", methods=["GET", "POST"])
 def forgot_password():
     if request.method == "GET":
         return render_template("forgot_password.html")
-    email = request.form.get("email", "").strip().lower()
-    if not _valid_email(email):
-        return render_template("forgot_password.html", error="Vui lòng nhập email hợp lệ.")
-    with _get_db() as connection:
-        user = connection.execute(
-            "SELECT id, full_name FROM users WHERE email = %s", (email,)
-        ).fetchone()
-        if user:
-            token = secrets.token_urlsafe(32)
-            connection.execute(
-                """
-                INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
-                VALUES (%s, %s, %s)
-                """,
-                (user["id"], _token_hash(token), datetime.now(timezone.utc) + timedelta(hours=1)),
-            )
-            reset_url = _absolute_url("reset_password", token=token)
-            _send_email(
-                email,
-                "Đặt lại mật khẩu DeepGuard",
-                f"Xin chào {user['full_name']},\n\nBấm vào liên kết sau để đặt lại mật khẩu:\n{reset_url}",
-            )
-    return render_template("forgot_password.html", message="Nếu email tồn tại, liên kết đặt lại mật khẩu đã được gửi.")
+    return render_template("forgot_password.html", error="Chức năng đặt lại mật khẩu qua email hiện đã tắt. Vui lòng liên hệ quản trị viên.")
 
 
 @app.route("/reset-password", methods=["GET", "POST"])
@@ -988,8 +881,8 @@ def settings():
                     avatar.save(avatar_directory / secure_filename(avatar_name))
                     avatar_url = f"/media/avatars/{avatar_name}"
                 connection.execute(
-                    "UPDATE users SET full_name = %s, email = %s, avatar_url = %s, email_verified = CASE WHEN email = %s THEN email_verified ELSE FALSE END WHERE id = %s",
-                    (full_name, email, avatar_url, email, user_id),
+                    "UPDATE users SET full_name = %s, email = %s, avatar_url = %s, email_verified = TRUE WHERE id = %s",
+                    (full_name, email, avatar_url, user_id),
                 )
                 session["user"].update({"full_name": full_name, "email": email})
             elif action == "password":
@@ -1127,8 +1020,7 @@ def admin_user_action(user_id: int):
                 "INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES (%s, %s, NOW() + INTERVAL '1 hour')",
                 (user_id, _token_hash(token)),
             )
-            reset_url = _absolute_url("reset_password", token=token)
-            _send_email(user["email"], "Đặt lại mật khẩu DeepGuard", f"Liên kết quản trị viên:\n{reset_url}")
+            logger.info("Admin %s created a password reset token for user %s", session["user"]["id"], user_id)
         else:
             return jsonify(error="Thao tác không hợp lệ."), 400
     return redirect(url_for("admin_users"))

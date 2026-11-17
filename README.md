@@ -2,7 +2,7 @@
 
 ## Deploy on Render
 
-The repository includes `render.yaml` for a Free Render web service and Free PostgreSQL database. Connect this repository to Render as a Blueprint. Render generates `DEEPGUARD_SECRET_KEY`; HTTPS session cookies are enabled for production. Configure `SMTP_HOST`, `SMTP_PORT=2525`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM` with an email provider that supports port 2525 so registration, verification, and password reset emails can be sent. Do not include trailing backslashes in these values. An unverified user who enters the correct password on the login page will receive a fresh verification email.
+The repository includes `render.yaml` for a Free Render web service and Free PostgreSQL database. Connect this repository to Render as a Blueprint. Render generates `DEEPGUARD_SECRET_KEY`; HTTPS session cookies are enabled for production. Email sending is disabled: users can log in immediately after registration, and password reset by email is unavailable. Administrators can issue a password reset from the user management page.
 
 The application can also use the individual `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` variables instead of `DATABASE_URL`.
 
@@ -57,11 +57,10 @@ Hệ thống sử dụng PostgreSQL với các bảng `users`, `contact_messages
 Các trang tài khoản:
 
 ```text
-/register          Đăng ký và gửi link xác thực email
+/register          Đăng ký tài khoản
 /login             Đăng nhập và ghi nhớ phiên
-/forgot-password   Yêu cầu link đặt lại mật khẩu
-/reset-password    Đặt mật khẩu mới từ token
-/verify-email      Xác thực email từ token
+/forgot-password   Thông báo liên hệ quản trị viên để đặt lại mật khẩu
+/reset-password    Đặt mật khẩu mới từ token quản trị viên cấp
 ```
 
 Các trang sau yêu cầu đăng nhập:
@@ -96,9 +95,8 @@ Các trang quản trị:
 
 Không cấp quyền admin cho tài khoản không thuộc nhóm quản trị.
 
-Để gửi email thật, điền các biến `SMTP_*` trong `.env`. Nếu chưa cấu hình SMTP,
-ứng dụng không gửi email ra ngoài mà ghi link dùng một lần vào log để kiểm thử
-local.
+Ứng dụng không gửi email. Tài khoản mới được phép đăng nhập ngay; nếu quên mật khẩu,
+người dùng cần liên hệ quản trị viên để được cấp liên kết đặt lại mật khẩu.
 
 Nền tảng hỗ trợ upload MP4, MOV, AVI và MKV (tối đa 500 MB), kiểm tra
 metadata/audio, xem trước video, chạy pipeline FGI theo từng đoạn 1 giây,
